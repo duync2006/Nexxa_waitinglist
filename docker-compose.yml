@@ -1,0 +1,19 @@
+services:
+  mongo:
+    image: mongo:7
+    container_name: nexxa-mongo
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USER}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD}
+      MONGO_INITDB_DATABASE: ${MONGODB_DB:-nexxa_waitlist}
+    ports:
+      # Chỉ mở cho chính máy chủ. Không mở cổng 27017 ra Security Group của AWS.
+      - "127.0.0.1:27017:27017"
+    volumes:
+      - mongo-data:/data/db
+      - mongo-config:/data/configdb
+
+volumes:
+  mongo-data:
+  mongo-config:
