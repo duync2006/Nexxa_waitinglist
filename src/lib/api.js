@@ -9,12 +9,20 @@ async function call(path, body) {
   });
   let data = {};
   try { data = await res.json(); } catch { /* bỏ qua */ }
-  if (!res.ok) throw new Error(data.error || 'Có lỗi xảy ra. Vui lòng thử lại.');
+  if (!res.ok) {
+    // Giữ nguyên body lỗi để caller đọc được, ví dụ 409 kèm profile của email đã đăng ký
+    const err = new Error(data.error || 'Có lỗi xảy ra. Vui lòng thử lại.');
+    err.status = res.status;
+    err.data = data;
+    throw err;
+  }
   return data;
 }
 
 export const api = {
   stats: () => call('/api/stats'),
   requestOtp: (email, ref) => call('/api/waitlist/request-otp', { email, ref }),
-  verify: (email, otp) => call('/api/waitlist/verify', { email, otp })
+  check: (email) => call('/api/waitlist/check?email=' + encodeURIComponent(email)),
+  verify: (email, otp) => call('/api/waitlist/verify', { email, otp }),
+  reserve: (email, tickers) => call('/api/reserve', { email, tickers })
 };

@@ -59,9 +59,9 @@ export default function DcaCalculator() {
     <section id="tinh-toan" className="container section">
       <div className="stack-4">
         <span className="eyebrow">Đầu tư định kỳ (DCA) trên Nexxa</span>
-        <h2 className="h2">Mỗi tháng một ít, để thời gian làm việc</h2>
+        <h2 className="h2">Mỗi tháng một ít, sở hữu những gì bạn biết</h2>
         <p className="muted section-lead wide">
-          Trên Nexxa, bạn mua cổ phiếu blue-chip đều đặn mỗi tháng, từ 50.000đ. Kéo các thanh trượt để xem danh mục lãi kép có thể tăng trưởng thế nào so với chỉ để tiền mặt, giả định lợi nhuận bình quân {R}%/năm.
+          {/* Trên Nexxa, bạn mua cổ phiếu blue-chip đều đặn mỗi tháng, từ 50.000đ. Kéo các thanh trượt để xem danh mục lãi kép có thể tăng trưởng thế nào so với chỉ để tiền mặt, giả định lợi nhuận bình quân {R}%/năm. */}
         </p>
       </div>
 
@@ -91,9 +91,9 @@ export default function DcaCalculator() {
             <div className="chart-plot">
               <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" role="img" aria-label={aria}>
                 {[0, 70, 140, 210].map((y) => (
-                  <line key={y} x1="0" y1={y} x2={W} y2={y} stroke="#E8EBEF" strokeWidth="1" strokeDasharray="4 4" vectorEffect="non-scaling-stroke" />
+                  <line key={y} x1="0" y1={y} x2={W} y2={y} style={{ stroke: 'var(--grid)' }} strokeWidth="1" strokeDasharray="4 4" vectorEffect="non-scaling-stroke" />
                 ))}
-                <line x1="0" y1={H} x2={W} y2={H} stroke="#C9CED6" strokeWidth="1" vectorEffect="non-scaling-stroke" />
+                <line x1="0" y1={H} x2={W} y2={H} style={{ stroke: 'var(--axis)' }} strokeWidth="1" vectorEffect="non-scaling-stroke" />
                 <path d={calc.area} fill="var(--accent)" fillOpacity="0.12" stroke="none" />
                 <path d={calc.line} fill="none" stroke="var(--accent)" strokeWidth="3" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
                 <path d={calc.cash} fill="none" stroke="#E07B2E" strokeWidth="2.5" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
@@ -116,9 +116,9 @@ export default function DcaCalculator() {
           <Slider id="calc-n" label="Thời gian đầu tư" valueText={`${fmt(N)} năm`} min={1} max={40} step={1} value={N} onChange={(v) => setN(v || 1)} minText="1 năm" maxText="40 năm" />
         </div>
 
-        <p className="disclaimer">
+        {/* <p className="disclaimer">
           Minh hoạ với lãi kép hằng tháng, chưa trừ phí và thuế. Lợi nhuận không được đảm bảo; giá cổ phiếu có thể giảm và kết quả quá khứ không phản ánh tương lai. Đây không phải lời khuyên đầu tư.
-        </p>
+        </p> */}
       </div>
     </section>
   );

@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import crypto from 'node:crypto';
 import { store, connectStore } from './store.js';
 import { sendOtpEmail } from './mailer.js';
+import { RESERVABLE } from '../src/lib/data.js';
 
 const PORT = Number(process.env.PORT) || 3001;
 const IS_PROD = process.env.NODE_ENV === 'production';
@@ -36,6 +37,18 @@ async function profile(user) {
 app.get('/api/stats', wrap(async (_req, res) => {
   const registered = await store.countUsers();
   res.json({ registered, totalSlots: TOTAL_SLOTS, remaining: Math.max(0, TOTAL_SLOTS - registered) });
+}));
+
+// Kiểm tra một email đã tham gia waitlist chưa. Frontend gọi trước khi gửi OTP;
+// email đã có thì hiện luôn kết quả hiện tại thay vì bắt xác thực lại.
+app.get('/api/waitlist/check', wrap(async (req, res) => {
+  const email = normEmail(req.query?.email);
+  if (!EMAIL_RE.test(email) || email.length > 254) {
+    return res.status(400).json({ error: 'Email chưa đúng định dạng. Vui lòng kiểm tra lại.' });
+  }
+  const user = await store.findUser(email);
+  if (!user) return res.json({ exists: false });
+  res.json({ exists: true, profile: await profile(user) });
 }));
 
 // Bước 1: nhập email → gửi OTP
@@ -89,8 +102,40 @@ app.post('/api/waitlist/verify', wrap(async (req, res) => {
   }
 
   await store.clearOtp(email);
-  const user = await store.createUser(email, rec.ref);
-  res.json(await profile(user));
+  const { user, created } = await store.createUser(email, rec.ref);
+  const current = await profile(user);
+  if (!created) {
+    return res.status(409).json({
+      error: 'Email này đã tham gia waitlist.',
+      alreadyRegistered: true,
+      profile: current
+    });
+  }
+  res.json(current);
+}));
+
+// Nhận quà Reserve: chỉ email đã đăng ký waitlist mới được ghi nhận lựa chọn
+app.post('/api/reserve', wrap(async (req, res) => {
+  const email = normEmail(req.body?.email);
+  if (!EMAIL_RE.test(email) || email.length > 254) {
+    return res.status(400).json({ error: 'Email chưa đúng định dạng.' });
+  }
+  const user = await store.findUser(email);
+  if (!user) {
+    return res.status(403).json({ error: 'Email này chưa tham gia waitlist. Vui lòng đăng ký trước khi nhận quà.' });
+  }
+
+  const requested = Array.isArray(req.body?.tickers) ? [...new Set(req.body.tickers.map((t) => String(t).toUpperCase()))] : [];
+  if (requested.length === 0 || requested.length > 100) {
+    return res.status(400).json({ error: 'Vui lòng chọn ít nhất một mã cổ phiếu.' });
+  }
+  const allowed = new Set(Object.values(RESERVABLE).flat().map((s) => s.t));
+  if (requested.some((t) => !allowed.has(t))) {
+    return res.status(400).json({ error: 'Có mã cổ phiếu không thuộc danh sách Reserve.' });
+  }
+
+  await store.saveReservation(email, requested);
+  res.json({ ok: true, tickers: requested });
 }));
 
 // Link mời ngắn: /r/ABC123 → /?ref=ABC123

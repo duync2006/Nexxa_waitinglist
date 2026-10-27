@@ -6,7 +6,7 @@ import { MongoClient } from 'mongodb';
 
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017';
 const MONGODB_DB = process.env.MONGODB_DB || 'nexxa_waitlist';
-
+console.log('[store] kết nối MongoDB:', MONGODB_URI, 'DB:', MONGODB_DB);
 // Mỗi lượt mời thành công = +10 bậc cho người mời.
 // score = joinIndex - BOOST * invites; hạng càng nhỏ càng cao, cùng score thì ai đăng ký trước đứng trên.
 const BOOST = 10;
@@ -55,12 +55,13 @@ export const store = {
   findByRef: (code) => users.findOne({ refCode: String(code || '').toUpperCase() }),
   countUsers: () => users.countDocuments({}),
 
-  // Trả về user đã tồn tại nếu email đã đăng ký, không tạo trùng.
+  // Trả về { user, created }. created=false nghĩa là email đã đăng ký từ trước, không tạo trùng.
   async createUser(email, referredBy) {
     const existing = await store.findUser(email);
-    if (existing) return existing;
+    if (existing) return { user: existing, created: false };
 
     const inviter = referredBy ? await store.findByRef(referredBy) : null;
+    const validInviter = inviter && inviter.email !== email ? inviter : null;
     const joinIndex = await nextJoinIndex();
     const user = {
       email,
@@ -68,7 +69,11 @@ export const store = {
       joinIndex,
       score: joinIndex,
       invites: 0,
-      referredBy: inviter && inviter.email !== email ? inviter.refCode : null,
+      // referrer giữ _id của người mời, referredBy giữ refCode của họ cho dễ tra bằng mắt
+      referrer: validInviter ? validInviter._id : null,
+      referredBy: validInviter ? validInviter.refCode : null,
+      // _id của những người đăng ký qua link mời của user này
+      referees: [],
       createdAt: new Date()
     };
 
@@ -78,15 +83,19 @@ export const store = {
       // Hai request cùng email chạy song song: unique index chặn, trả về bản ghi đã có
       if (err.code === 11000) {
         const dup = await store.findUser(email);
-        if (dup) return dup;
+        if (dup) return { user: dup, created: false };
       }
       throw err;
     }
 
-    if (user.referredBy) {
-      await users.updateOne({ _id: inviter._id }, { $inc: { invites: 1, score: -BOOST } });
+    // insertOne gán _id vào user, nên tới đây đã có id để ghi vào referees của người mời
+    if (user.referrer) {
+      await users.updateOne(
+        { _id: user.referrer },
+        { $inc: { invites: 1, score: -BOOST }, $push: { referees: user._id } }
+      );
     }
-    return user;
+    return { user, created: true };
   },
 
   // Hạng = số người có score nhỏ hơn, hoặc bằng score nhưng đăng ký trước, cộng 1.
@@ -105,5 +114,9 @@ export const store = {
     const { _id, ...fields } = record;
     return otps.replaceOne({ email }, { ...fields, email }, { upsert: true });
   },
-  clearOtp: (email) => otps.deleteOne({ email })
+  clearOtp: (email) => otps.deleteOne({ email }),
+
+  // Ghi nhận các mã đã chọn Reserve cho user (ghi đè lựa chọn trước đó)
+  saveReservation: (email, tickers) =>
+    users.updateOne({ email }, { $set: { reservation: { tickers, updatedAt: new Date() } } })
 };

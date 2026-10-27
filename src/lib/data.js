@@ -21,3 +21,32 @@ export const STOCK_SOURCE = {
 };
 
 export const tierOfRank = (rank) => TIERS.find((t) => rank >= t.from && rank <= t.to) || null;
+
+// Hai pool trong màn hình Reserve. VIP = nhóm VN30 (hạng GOLD); Standard = các hạng còn lại.
+export const POOLS = [
+  { key: 'vip', label: 'VIP', desc: 'Cổ phiếu nhóm VN30', tiers: ['gold'] },
+  { key: 'standard', label: 'Standard', desc: 'Cổ phiếu top 30–100', tiers: ['silver', 'copper'] }
+];
+
+// Danh sách mã có thể nhận, dùng chung cho UI và kiểm tra phía server
+export const RESERVABLE = Object.fromEntries(
+  POOLS.map((p) => [p.key, p.tiers.flatMap((k) => STOCKS[k])])
+);
+
+// Thứ tự mã phổ biến của từng pool, hiển thị trước khi người dùng bấm "Xem thêm".
+// VIP dùng đúng danh sách blue-chip trong FeaturedStocks; Standard là các mã tên tuổi dễ nhận ra.
+const POPULAR_TICKERS = {
+  vip: ['VCB', 'VIC', 'VHM', 'VNM', 'HPG', 'FPT', 'MWG', 'TCB', 'MSN', 'VPB', 'GAS', 'SSI'],
+  standard: ['PNJ', 'PLX', 'TPB', 'REE', 'HCM', 'VND', 'POW', 'FRT']
+};
+
+// Mỗi pool tách thành { popular, rest }: popular theo đúng thứ tự trên, rest giữ thứ tự gốc.
+// Mã nào trong POPULAR_TICKERS không còn trong pool thì bị bỏ qua, không làm vỡ danh sách.
+export const POOL_STOCKS = Object.fromEntries(
+  POOLS.map((p) => {
+    const all = RESERVABLE[p.key];
+    const popular = (POPULAR_TICKERS[p.key] || []).map((t) => all.find((s) => s.t === t)).filter(Boolean);
+    const inPopular = new Set(popular.map((s) => s.t));
+    return [p.key, { popular, rest: all.filter((s) => !inPopular.has(s.t)) }];
+  })
+);
