@@ -1,0 +1,693 @@
+{
+  "info": {
+    "_postman_id": "b1f4c8e2-7a3d-4c9e-9f21-3e8d5a7c1b40",
+    "name": "Nexxa Waitlist API",
+    "description": "API waitlist Nexxa: email → OTP → xếp hạng → link mời → Reserve cổ phiếu.\n\n## Cách dùng nhanh\n\nChạy lần lượt các request trong thư mục **Luồng chính** từ trên xuống. Script test tự lưu `devOtp` và `refCode` vào biến collection nên không phải chép tay:\n\n1. `Gửi OTP` → lưu `otp`\n2. `Xác thực OTP` → lưu `refCode` của chính bạn\n3. `Reserve cổ phiếu` → dùng email vừa đăng ký\n\n## Biến\n\n| Biến | Mặc định | Ghi chú |\n|---|---|---|\n| `baseUrl` | `http://localhost:3001` | Dev. Production: `https://nexxa.asia/waitlist` |\n| `email` | `test@example.com` | Đổi thành email bạn muốn thử |\n| `otp` | (trống) | Tự điền sau khi gọi `Gửi OTP` |\n| `refCode` | (trống) | Tự điền sau khi `Xác thực OTP` thành công |\n| `refCodeNguoiMoi` | (trống) | Điền tay refCode của người mời khi muốn thử luồng giới thiệu |\n\n## Lưu ý\n\n- `devOtp` **chỉ trả về khi `NODE_ENV` không phải production**. Trên production phải lấy mã từ email thật.\n- Request `Link mời ngắn` trả 302. Postman mặc định tự đi theo redirect — tắt **Settings → Automatically follow redirects** để nhìn thấy header `Location`.\n- **Toàn bộ API đều dùng POST**, kể cả các API chỉ đọc như `/api/stats` và `/api/waitlist/check`. Tham số luôn nằm trong body JSON, không dùng query string.\n- Ngoại lệ duy nhất là `/r/:code` — đó là link người dùng bấm trong trình duyệt nên bắt buộc phải là GET.\n- Chưa có rate limit theo IP, nhưng `Gửi OTP` có cooldown 60 giây cho mỗi email.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3001",
+      "type": "string"
+    },
+    {
+      "key": "email",
+      "value": "test@example.com",
+      "type": "string"
+    },
+    {
+      "key": "otp",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "refCode",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "refCodeNguoiMoi",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "budget",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Luồng chính",
+      "description": "Chạy từ trên xuống để đi trọn vòng đăng ký.",
+      "item": [
+        {
+          "name": "1. Thống kê waitlist",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/stats",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "stats"
+              ]
+            },
+            "description": "Số người đã xác thực email và số suất quà còn lại. Không cần xác thực. Body rỗng `{}`.\n\n**200** `{ registered, totalSlots, remaining }`\n\n`remaining` không bao giờ âm — vượt quá 1.000 người thì trả 0.",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Trả về 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Đủ 3 field', () => {",
+                  "  const b = pm.response.json();",
+                  "  pm.expect(b).to.have.all.keys('registered', 'totalSlots', 'remaining');",
+                  "});",
+                  "pm.test('remaining không âm', () => pm.expect(pm.response.json().remaining).to.be.at.least(0));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "2. Kiểm tra email đã đăng ký chưa",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/waitlist/check",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "waitlist",
+                "check"
+              ]
+            },
+            "description": "Frontend gọi trước khi gửi OTP: email đã có thì hiện luôn kết quả hiện tại thay vì bắt xác thực lại.\n\n**200 (chưa đăng ký)** `{ exists: false }`\n\n**200 (đã đăng ký)** `{ exists: true, profile: { email, rank, registered, refCode, invites } }`\n\n**400** email sai định dạng.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{email}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Trả về 200', () => pm.response.to.have.status(200));",
+                  "const b = pm.response.json();",
+                  "if (b.exists) {",
+                  "  pm.collectionVariables.set('refCode', b.profile.refCode);",
+                  "  console.log('Email này đã đăng ký, hạng', b.profile.rank);",
+                  "} else {",
+                  "  console.log('Email chưa đăng ký — chạy tiếp bước 3 để gửi OTP.');",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "3. Gửi OTP",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{email}}\",\n  \"ref\": \"{{refCodeNguoiMoi}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/waitlist/request-otp",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "waitlist",
+                "request-otp"
+              ]
+            },
+            "description": "Gửi mã OTP 6 số tới email.\n\n- `ref` **không bắt buộc** — refCode của người mời. Để trống nếu đăng ký trực tiếp.\n- Mã sống **10 phút**, gửi lại được sau **60 giây**.\n- Chỉ hash SHA-256 của mã được lưu xuống DB, không lưu mã gốc.\n\n**200** `{ ok: true, devOtp? }` — `devOtp` chỉ có ở môi trường dev.\n\n**400** email sai định dạng.\n\n**429** `{ error, retryAfter }` — gửi lại quá sớm.\n\n**502** không gửi được email."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  const otp = pm.response.json().devOtp;",
+                  "  if (otp) {",
+                  "    pm.collectionVariables.set('otp', otp);",
+                  "    console.log('Đã lưu OTP:', otp);",
+                  "  } else {",
+                  "    console.log('Không có devOtp (môi trường production) — lấy mã từ email rồi điền tay vào biến otp.');",
+                  "  }",
+                  "  pm.test('Trả về ok', () => pm.expect(pm.response.json().ok).to.eql(true));",
+                  "} else if (pm.response.code === 429) {",
+                  "  console.log('Phải đợi thêm', pm.response.json().retryAfter, 'giây.');",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "4. Xác thực OTP",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{email}}\",\n  \"otp\": \"{{otp}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/waitlist/verify",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "waitlist",
+                "verify"
+              ]
+            },
+            "description": "Xác thực mã và tạo chỗ trong waitlist.\n\nNếu lúc gửi OTP có kèm `ref` hợp lệ thì người mời được **+1 lượt mời và −10 điểm** ngay tại bước này.\n\n**200** `{ email, rank, registered, refCode, invites }`\n\n**400** mã sai, hoặc mã đã hết hạn / chưa từng xin mã.\n\n**409** `{ error, alreadyRegistered: true, profile }` — email đã tham gia waitlist, kèm kết quả hiện tại.\n\n**429** nhập sai quá 5 lần, phải xin mã mới."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const b = pm.response.json();",
+                  "if (pm.response.code === 200) {",
+                  "  pm.collectionVariables.set('refCode', b.refCode);",
+                  "  console.log('Đăng ký thành công. Hạng', b.rank, '— refCode', b.refCode);",
+                  "  pm.test('Đủ 5 field của profile', () =>",
+                  "    pm.expect(b).to.have.all.keys('email', 'rank', 'registered', 'refCode', 'invites'));",
+                  "} else if (pm.response.code === 409) {",
+                  "  pm.collectionVariables.set('refCode', b.profile.refCode);",
+                  "  console.log('Email đã đăng ký từ trước. Hạng hiện tại', b.profile.rank);",
+                  "} else {",
+                  "  console.log('Lỗi:', b.error);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "5. Quyền chọn + bảng giá Reserve",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{email}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/reserve/options",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "reserve",
+                "options"
+              ]
+            },
+            "description": "Quyền chọn cổ phiếu và bảng giá, gọi TRƯỚC khi người dùng chọn.\n\n- Top 1.000 (theo `score`): nhóm VIP + Standard, ngân sách 100.000đ.\n- Từ hạng 1.001: chỉ nhóm Standard, ngân sách 50.000đ.\n- `email` để rỗng → bản xem thử (`preview: true`), tạm áp mức cao nhất.\n- `locked: true` nghĩa là quyền lợi đã chốt ở lần Reserve đầu tiên, hạng trôi về sau không đổi.\n- `prices` chỉ chứa giá của những mã user được phép chọn.\n\n**200** `{ rank, budget, pools, locked, preview, selected, prices }`"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const b = pm.response.json();",
+                  "pm.test('Có ngân sách và nhóm được phép', () => {",
+                  "  pm.expect(b.budget).to.be.a('number');",
+                  "  pm.expect(b.pools).to.be.an('array').that.is.not.empty;",
+                  "});",
+                  "pm.collectionVariables.set('budget', b.budget);",
+                  "console.log('Ngân sách:', b.budget, '· nhóm:', b.pools.join(', '), '· preview:', b.preview);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "6. Reserve cổ phiếu",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{email}}\",\n  \"tickers\": [\"VCB\", \"FPT\", \"HPG\"]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/reserve",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "reserve"
+              ]
+            },
+            "description": "Ghi nhận các mã cổ phiếu đã chọn. **Chọn lại thì ghi đè** lựa chọn trước đó.\n\n- Chỉ email đã xác thực waitlist mới gọi được.\n- Mã viết thường vẫn nhận, mã trùng bị gộp lại. Tối đa 100 mã.\n- Mã phải thuộc **nhóm user được phép** (xem request Quyền chọn ở trên).\n- Tổng giá trị không được vượt ngân sách của hạng.\n- Lần Reserve đầu tiên **chốt** hạng, ngân sách, nhóm và bảng giá — không đổi về sau.\n\n**200** `{ ok: true, tickers, totalValue, budget }`\n\n**400** email sai định dạng · không chọn mã nào · mã ngoài danh sách · mã không thuộc nhóm được phép (kèm `wrongPool`) · tổng vượt ngân sách (kèm `totalValue`, `budget`).\n\n**403** email chưa tham gia waitlist.\n\n**503** thiếu giá trong snapshot (kèm `missing`) — chạy `npm run prices`."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  const b = pm.response.json();",
+                  "  pm.test('Trả về danh sách mã đã ghi', () =>",
+                  "    pm.expect(b.tickers).to.be.an('array').that.is.not.empty);",
+                  "  pm.test('Tổng không vượt ngân sách', () => pm.expect(b.totalValue).to.be.at.most(b.budget));",
+                  "  console.log('Tổng:', b.totalValue, '/', b.budget);",
+                  "} else {",
+                  "  console.log('Lỗi:', pm.response.json().error);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "7. Link mời ngắn",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/r/{{refCode}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "r",
+                "{{refCode}}"
+              ]
+            },
+            "description": "Chuyển hướng `/r/ABC123` → `../?ref=ABC123`.\n\nDùng đường dẫn **tương đối** để chạy đúng cả ở `/r/...` (dev) lẫn `/waitlist/r/...` (nginx bỏ prefix `/waitlist`).\n\n**302** header `Location: ../?ref=CODE`\n\n⚠️ Postman mặc định tự đi theo redirect. Tắt **Settings → Automatically follow redirects** để nhìn thấy mã 302 và header `Location`."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 302) {",
+                  "  pm.test('Có header Location', () => pm.expect(pm.response.headers.get('Location')).to.include('?ref='));",
+                  "} else {",
+                  "  console.log('Postman đã tự đi theo redirect. Tắt \"Automatically follow redirects\" trong Settings để thấy 302.');",
+                  "}"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Các trường hợp lỗi",
+      "description": "Những response lỗi mà frontend đang xử lý riêng.",
+      "item": [
+        {
+          "name": "Email sai định dạng (400)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"khong-phai-email\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/waitlist/request-otp",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "waitlist",
+                "request-otp"
+              ]
+            },
+            "description": "**400** `{ \"error\": \"Email chưa đúng định dạng. Vui lòng kiểm tra lại.\" }`"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Trả về 400', () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Gửi OTP quá sớm (429)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{email}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/waitlist/request-otp",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "waitlist",
+                "request-otp"
+              ]
+            },
+            "description": "Gọi ngay sau request `3. Gửi OTP` để thấy cooldown 60 giây.\n\n**429** `{ error: \"Vui lòng đợi N giây trước khi gửi lại mã.\", retryAfter: N }`"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Trả về 429 kèm retryAfter', () => {",
+                  "  pm.response.to.have.status(429);",
+                  "  pm.expect(pm.response.json().retryAfter).to.be.a('number');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "OTP sai (400)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{email}}\",\n  \"otp\": \"000000\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/waitlist/verify",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "waitlist",
+                "verify"
+              ]
+            },
+            "description": "Mỗi lần sai tăng bộ đếm. Sai quá **5 lần** thì chuyển thành **429** và phải xin mã mới.\n\n**400** `{ \"error\": \"Mã OTP không đúng. Vui lòng kiểm tra lại.\" }`"
+          }
+        },
+        {
+          "name": "Email đã đăng ký (409)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{email}}\",\n  \"otp\": \"{{otp}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/waitlist/verify",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "waitlist",
+                "verify"
+              ]
+            },
+            "description": "Xin mã mới rồi xác thực lại bằng một email đã đăng ký.\n\n**409** `{ error, alreadyRegistered: true, profile: { email, rank, registered, refCode, invites } }`\n\nFrontend đọc `alreadyRegistered` và `profile` để hiện thẳng kết quả hiện tại thay vì báo lỗi."
+          }
+        },
+        {
+          "name": "Reserve khi chưa đăng ký (403)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"chua-dang-ky@example.com\",\n  \"tickers\": [\"VCB\"]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/reserve",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "reserve"
+              ]
+            },
+            "description": "**403** `{ \"error\": \"Email này chưa tham gia waitlist. Vui lòng đăng ký trước khi nhận quà.\" }`"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Trả về 403', () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Reserve mã không hợp lệ (400)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{email}}\",\n  \"tickers\": [\"VCB\", \"KHONGCO\"]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/reserve",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "reserve"
+              ]
+            },
+            "description": "**400** `{ \"error\": \"Có mã cổ phiếu không thuộc danh sách Reserve.\" }`"
+          }
+        },
+        {
+          "name": "Reserve vượt ngân sách (400)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{email}}\",\n  \"tickers\": [\"VCB\", \"VIC\", \"VHM\", \"VNM\", \"HPG\", \"FPT\", \"MWG\", \"TCB\", \"MSN\", \"VPB\"]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/reserve",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "reserve"
+              ]
+            },
+            "description": "Chọn quá nhiều mã so với ngân sách của hạng. Thông báo lỗi kèm con số cụ thể, và body có `totalValue` lẫn `budget` để frontend hiển thị.\n\n**400**"
+          }
+        },
+        {
+          "name": "Reserve mã ngoài nhóm được phép (400)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{email}}\",\n  \"tickers\": [\"PNJ\", \"VCB\"]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/reserve",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "reserve"
+              ]
+            },
+            "description": "Chạy với một email nằm **sau top 1.000** (chỉ được nhóm Standard) rồi chọn một mã VIP. Lỗi nêu đích danh mã sai trong `wrongPool`.\n\n**400**"
+          }
+        }
+      ]
+    }
+  ]
+}

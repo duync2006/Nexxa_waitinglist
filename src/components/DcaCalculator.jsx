@@ -3,6 +3,7 @@ import { axisMoney, fmt, money, vnd } from '../lib/format.js';
 
 const W = 1000;
 const H = 280;
+const CASH = '#E07B2E';
 
 function niceMax(x) {
   if (x <= 0) return 1;
@@ -49,11 +50,15 @@ export default function DcaCalculator() {
       area: `${line} L${W},${H} L0,${H} Z`,
       yLabels: [1, 0.75, 0.5, 0.25, 0].map((k) => axisMoney(maxV * k)),
       xTicks: [...new Set([0, 1, 2, 3, 4, 5].map((k) => Math.round((N * k) / 5)))],
+      // Vị trí điểm cuối tính theo % chiều cao khung, để vẽ chấm và nhãn bằng HTML chồng lên
+      // SVG: SVG đang preserveAspectRatio="none" nên chữ đặt bên trong sẽ bị kéo méo.
+      endValue: (finalV / maxV) * 100,
+      endCash: (paid / maxV) * 100,
       multiple: (finalV / paid).toLocaleString('vi-VN', { maximumFractionDigits: 1 })
     };
   }, [C, R, N]);
 
-  const aria = `Biểu đồ: đầu tư ${vnd(C)} mỗi tháng trong ${N} năm, lợi nhuận ${R}%/năm, đạt khoảng ${money(calc.finalV)} so với ${money(calc.paid)} tiền gốc.`;
+  const aria = `Biểu đồ: đầu tư ${vnd(C)} mỗi tháng trong ${N} năm, lợi nhuận ${R}%/năm, đạt khoảng ${money(calc.finalV)} VNĐ so với ${money(calc.paid)} VNĐ tiền gốc.`;
 
   return (
     <section id="tinh-toan" className="container section">
@@ -68,52 +73,64 @@ export default function DcaCalculator() {
       <div className="calc-card">
         <div className="kpis">
           <div className="kpi">
-            <span className="kpi-label">Mỗi tháng</span>
+            <span className="kpi-label">Monthly</span>
             <span className="kpi-value">{vnd(C)}</span>
           </div>
           <div className="kpi">
-            <span className="kpi-label">Tổng tiền gốc bỏ ra</span>
+            <span className="kpi-label">Investment</span>
             <span className="kpi-value">{money(calc.paid)}</span>
           </div>
           <div className="kpi kpi-good">
-            <span className="kpi-label">Giá trị dự kiến sau {N} năm</span>
+            <span className="kpi-label">ROI</span>
             <span className="kpi-value">{money(calc.finalV)}</span>
-            <span className="kpi-label">Gấp {calc.multiple} lần tiền gốc</span>
+            {/* <span className="kpi-label">Gấp {calc.multiple} lần tiền gốc</span> */}
           </div>
         </div>
 
         <div className="stack-8">
-          <span className="muted-13">Giá trị danh mục (VNĐ)</span>
+          {/* Đơn vị nằm cùng cụm chú thích bên trái, chừa góc phải trên cho nhãn giá trị cuối đường. */}
+          <div className="legend">
+            <span><i style={{ background: 'var(--accent)' }} />ROI</span>
+            <span><i style={{ background: CASH }} />Investment</span>
+            {/* <span className="legend-unit">VNĐ</span> */}
+          </div>
           <div className="chart">
             <div className="y-axis">
               {calc.yLabels.map((t, i) => <span key={i}>{t}</span>)}
             </div>
             <div className="chart-plot">
-              <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" role="img" aria-label={aria}>
-                {[0, 70, 140, 210].map((y) => (
-                  <line key={y} x1="0" y1={y} x2={W} y2={y} style={{ stroke: 'var(--grid)' }} strokeWidth="1" strokeDasharray="4 4" vectorEffect="non-scaling-stroke" />
-                ))}
-                <line x1="0" y1={H} x2={W} y2={H} style={{ stroke: 'var(--axis)' }} strokeWidth="1" vectorEffect="non-scaling-stroke" />
-                <path d={calc.area} fill="var(--accent)" fillOpacity="0.12" stroke="none" />
-                <path d={calc.line} fill="none" stroke="var(--accent)" strokeWidth="3" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
-                <path d={calc.cash} fill="none" stroke="#E07B2E" strokeWidth="2.5" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
-              </svg>
-              <div className="x-axis">
-                {calc.xTicks.map((t) => <span key={t}>{t}</span>)}
+              <div className="chart-area">
+                <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" role="img" aria-label={aria}>
+                  {[0, 70, 140, 210].map((y) => (
+                    <line key={y} x1="0" y1={y} x2={W} y2={y} style={{ stroke: 'var(--grid)' }} strokeWidth="1" strokeDasharray="4 4" vectorEffect="non-scaling-stroke" />
+                  ))}
+                  {calc.xTicks.slice(1).map((t) => (
+                    <line key={t} x1={(t / N) * W} y1="0" x2={(t / N) * W} y2={H} style={{ stroke: 'var(--grid)' }} strokeWidth="1" strokeDasharray="4 4" vectorEffect="non-scaling-stroke" />
+                  ))}
+                  <line x1="0" y1={H} x2={W} y2={H} style={{ stroke: 'var(--axis)' }} strokeWidth="1" vectorEffect="non-scaling-stroke" />
+                  <path d={calc.area} fill="var(--accent)" fillOpacity="0.12" stroke="none" />
+                  <path d={calc.line} fill="none" stroke="var(--accent)" strokeWidth="3" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+                  <path d={calc.cash} fill="none" stroke={CASH} strokeWidth="2.5" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+                </svg>
+                {/* Nhãn giá trị ngay ở cuối mỗi đường, khỏi phải dóng mắt sang trục bên trái.
+                    Nhãn danh mục đặt phía trên chấm, nhãn tiền gốc phía dưới, để lúc hai đường
+                    trùng nhau (lợi nhuận 0%) chúng không chồng lên nhau. */}
+                <span className="chart-dot" style={{ bottom: `${calc.endValue}%`, background: 'var(--accent)' }} />
+                <span className="chart-dot" style={{ bottom: `${calc.endCash}%`, background: CASH }} />
+                <span className="chart-end chart-end-up" style={{ bottom: `${calc.endValue}%`, color: 'var(--accent)' }}>{money(calc.finalV)}</span>
+                <span className="chart-end chart-end-down" style={{ bottom: `${calc.endCash}%`, color: CASH }}>{money(calc.paid)}</span>
               </div>
-              <span className="x-title">Số năm đầu tư</span>
+              <div className="x-axis">
+                {calc.xTicks.map((t, i) => <span key={t}>{t}{i === calc.xTicks.length - 1 ? ' năm' : ''}</span>)}
+              </div>
             </div>
-          </div>
-          <div className="legend">
-            <span><i style={{ background: 'var(--accent)' }} />Danh mục cổ phiếu trên Nexxa (lãi kép)</span>
-            <span><i style={{ background: '#E07B2E' }} />Tổng tiền gốc (không sinh lời)</span>
           </div>
         </div>
 
         <div className="sliders">
-          <Slider id="calc-c" label="Số tiền mỗi tháng" valueText={vnd(C)} min={50000} max={5000000} step={50000} value={C} onChange={(v) => setC(v || 50000)} minText="50.000đ" maxText="5 triệu" />
-          <Slider id="calc-r" label="Lợi nhuận kỳ vọng / năm" valueText={`${R}%`} min={0} max={20} step={1} value={R} onChange={(v) => setR(v || 0)} minText="0%" maxText="20%" />
-          <Slider id="calc-n" label="Thời gian đầu tư" valueText={`${fmt(N)} năm`} min={1} max={40} step={1} value={N} onChange={(v) => setN(v || 1)} minText="1 năm" maxText="40 năm" />
+          <Slider id="calc-c" label="Monthly Investment" valueText={vnd(C)} min={50000} max={5000000} step={50000} value={C} onChange={(v) => setC(v || 50000)} minText="50.000đ" maxText="5 triệu" />
+          <Slider id="calc-r" label="Growth Rate" valueText={`${R}%`} min={0} max={20} step={1} value={R} onChange={(v) => setR(v || 0)} minText="0%" maxText="20%" />
+          <Slider id="calc-n" label="Investment Period" valueText={`${fmt(N)} years`} min={1} max={40} step={1} value={N} onChange={(v) => setN(v || 1)} minText="1 year" maxText="40 years" />
         </div>
 
         {/* <p className="disclaimer">

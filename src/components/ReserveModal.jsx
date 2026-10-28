@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '../lib/api.js';
 import { POOLS, POOL_STOCKS, RESERVABLE } from '../lib/data.js';
+import { vnd } from '../lib/format.js';
 
 // Thanh cuộn do mình tự vẽ. Thanh native trên mobile luôn là overlay và tự mờ đi khi ngừng cuộn —
 // đó là hành vi ở tầng hệ điều hành, ::-webkit-scrollbar không can thiệp được. Nên ẩn hẳn thanh
@@ -78,6 +79,8 @@ export default function ReserveModal({ open, onClose, me, onGoSignup }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [done, setDone] = useState(false);
+  // Quyền chọn + bảng giá do server quyết định: ngân sách, nhóm được phép, giá từng mã.
+  const [opts, setOpts] = useState(null);
 
   useEffect(() => {
     if (!open) return undefined;
@@ -86,17 +89,52 @@ export default function ReserveModal({ open, onClose, me, onGoSignup }) {
     return () => document.removeEventListener('keydown', onKey);
   }, [open, onClose]);
 
+  useEffect(() => {
+    if (!open) return undefined;
+    let alive = true;
+    setOpts(null);
+    setError('');
+    api
+      .reserveOptions(me?.email)
+      .then((o) => {
+        if (!alive) return;
+        setOpts(o);
+        // Lựa chọn đã ghi nhận trước đó hiện lại trong ô nhận, để sửa chứ không chọn lại từ đầu.
+        setBasket(o.selected ?? []);
+      })
+      .catch((err) => { if (alive) setError(err.message); });
+    return () => { alive = false; };
+  }, [open, me?.email]);
+
   if (!open) return null;
 
   const stockByTicker = Object.fromEntries(Object.values(RESERVABLE).flat().map((s) => [s.t, s]));
   // Để gắn tag phân loại lên chip trong ô đã chọn; hai pool không có mã nào trùng nhau.
   const poolByTicker = Object.fromEntries(POOLS.flatMap((p) => RESERVABLE[p.key].map((s) => [s.t, p.key])));
+
+  const prices = opts?.prices ?? {};
+  const budget = opts?.budget ?? 0;
+  const total = basket.reduce((sum, t) => sum + (prices[t] ?? 0), 0);
+  const left = budget - total;
+
+  const priceOf = (t) => prices[t];
+  // Mã đã chọn luôn bấm được (để bỏ ra). Mã chưa chọn phải có giá và còn vừa ngân sách.
+  const canPick = (t) => basket.includes(t) || (typeof priceOf(t) === 'number' && priceOf(t) <= left);
+  const whyBlocked = (t) =>
+    typeof priceOf(t) !== 'number'
+      ? 'Chưa có giá cho mã này'
+      : `Giá ${vnd(priceOf(t))} vượt phần ngân sách còn lại (${vnd(Math.max(0, left))})`;
+
+  // Hạng ngoài top 1.000 chỉ được nhóm Standard: ẩn hẳn nhóm VIP thay vì cho chọn rồi báo lỗi.
+  const visiblePools = opts ? POOLS.filter((p) => opts.pools.includes(p.key)) : POOLS;
+
   const add = (t) => { setDone(false); setBasket((b) => (b.includes(t) ? b : [...b, t])); };
   const remove = (t) => { setDone(false); setBasket((b) => b.filter((x) => x !== t)); };
   const toggle = (t) => (basket.includes(t) ? remove(t) : add(t));
 
   const signedUp = Boolean(me);
-  const canReceive = signedUp && basket.length > 0 && !busy;
+  // Chưa tải xong quyền chọn thì chưa cho gửi — thà đợi còn hơn để server từ chối cả giỏ.
+  const canReceive = signedUp && basket.length > 0 && !busy && Boolean(opts);
 
   async function receive() {
     setBusy(true);
@@ -128,6 +166,32 @@ export default function ReserveModal({ open, onClose, me, onGoSignup }) {
           <button type="button" className="icon-btn" onClick={onClose} aria-label="Đóng">×</button>
         </div>
 
+        {opts && (
+          <div className="reserve-budget">
+            <div className="reserve-budget-head">
+              <span className="muted-13">
+                {/* Không liệt kê tên nhóm ở đây: chuỗi dài bị cắt trên mobile, mà các
+                    nhóm được phép đã hiện thành từng mục ngay bên dưới. */}
+                {opts.preview ? 'Bản xem thử' : `Ngân sách hạng #${opts.rank ?? '—'}`}
+              </span>
+              <span className="reserve-budget-num">{vnd(total)} / {vnd(budget)}</span>
+            </div>
+            <div
+              className="bar"
+              role="progressbar"
+              aria-valuemin={0}
+              aria-valuemax={budget}
+              aria-valuenow={total}
+              aria-label={`Đã chọn ${vnd(total)} trong ngân sách ${vnd(budget)}`}
+            >
+              <div
+                className="bar-fill"
+                style={{ width: `${budget ? Math.min(100, Math.round((total / budget) * 100)) : 0}%` }}
+              />
+            </div>
+          </div>
+        )}
+
         <section
           className={`dropzone${over ? ' over' : ''}`}
           aria-label="Ô nhận cổ phiếu"
@@ -137,7 +201,7 @@ export default function ReserveModal({ open, onClose, me, onGoSignup }) {
             e.preventDefault();
             setOver(false);
             const t = e.dataTransfer.getData('text/plain');
-            if (stockByTicker[t]) add(t);
+            if (stockByTicker[t] && canPick(t)) add(t);
           }}
         >
           {basket.length === 0 ? (
@@ -154,7 +218,7 @@ export default function ReserveModal({ open, onClose, me, onGoSignup }) {
         </section>
 
         <div className="reserve-pools">
-          {POOLS.map((pool) => {
+          {visiblePools.map((pool) => {
             // Mã phổ biến xếp trước, phần còn lại nối sau; cả danh sách nằm trong một vùng cuộn.
             const { popular, rest } = POOL_STOCKS[pool.key];
             const stocks = [...popular, ...rest];
@@ -167,15 +231,18 @@ export default function ReserveModal({ open, onClose, me, onGoSignup }) {
                 <ScrollBox label={`${stocks.length} mã ${pool.label}`}>
                   {stocks.map((s) => {
                     const picked = basket.includes(s.t);
+                    const price = priceOf(s.t);
+                    const blocked = Boolean(opts) && !canPick(s.t);
                     return (
                       <button
                         key={s.t}
                         type="button"
-                        className="chip"
-                        draggable
+                        className={`chip${blocked ? ' chip-off' : ''}`}
+                        draggable={!blocked}
                         aria-pressed={picked}
-                        title={s.n}
-                        onClick={() => toggle(s.t)}
+                        aria-disabled={blocked}
+                        title={blocked ? `${s.n} — ${whyBlocked(s.t)}` : s.n}
+                        onClick={() => { if (!blocked) toggle(s.t); }}
                         onDragStart={(e) => {
                           e.dataTransfer.setData('text/plain', s.t);
                           e.dataTransfer.effectAllowed = 'copy';
@@ -183,6 +250,7 @@ export default function ReserveModal({ open, onClose, me, onGoSignup }) {
                       >
                         <span className="chip-t">{s.t}</span>
                         <span className="chip-n">{s.n}</span>
+                        <span className="chip-p">{typeof price === 'number' ? vnd(price) : '—'}</span>
                       </button>
                     );
                   })}
@@ -205,7 +273,7 @@ export default function ReserveModal({ open, onClose, me, onGoSignup }) {
           {error && <p role="alert" className="error">{error}</p>}
           {done && <p className="success-line" role="status">Đã ghi nhận {basket.length} mã cho {me.email}</p>}
           <div className="reserve-actions">
-            <span className="muted-14">Đã chọn {basket.length} mã</span>
+            <span className="muted-14">Đã chọn {basket.length} mã · còn {vnd(Math.max(0, left))}</span>
             <button type="button" className="btn btn-primary" onClick={receive} disabled={!canReceive}>
               {busy ? 'Đang ghi nhận…' : 'Nhận'}
             </button>

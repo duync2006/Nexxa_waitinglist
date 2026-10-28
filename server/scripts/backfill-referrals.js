@@ -1,18 +1,18 @@
 // Điền hai field referrer / referees cho các user đã có sẵn trong DB.
 // Nguồn sự thật là referredBy (refCode của người mời) — chạy lại nhiều lần vẫn an toàn.
 //
-//   node --env-file=.env server/backfill-referrals.js           # chạy thử, không ghi gì
-//   node --env-file=.env server/backfill-referrals.js --apply   # ghi thật
-import { MongoClient } from 'mongodb';
+//   node --env-file=.env server/scripts/backfill-referrals.js           # chạy thử, không ghi gì
+//   node --env-file=.env server/scripts/backfill-referrals.js --apply   # ghi thật
+import { connectDb, disconnectDb } from '../db/connect.js';
+import { User } from '../models/index.js';
 
 const apply = process.argv.includes('--apply');
 
-const client = new MongoClient(process.env.MONGODB_URI || 'mongodb://localhost:27017');
-await client.connect();
-const db = client.db(process.env.MONGODB_DB || 'nexxa_waitlist');
-const users = db.collection('users');
+await connectDb();
 
-const all = await users.find({}).sort({ joinIndex: 1 }).toArray();
+// .lean() để lấy object thuần: cần phân biệt "thiếu field" với "field bằng null/[]",
+// mà document Mongoose luôn điền sẵn giá trị mặc định nên hasOwnProperty sẽ luôn đúng.
+const all = await User.find({}).sort({ joinIndex: 1 }).lean();
 const byRefCode = new Map(all.map((u) => [u.refCode, u]));
 
 const ops = [];
@@ -24,7 +24,9 @@ for (const u of all) {
     warnings.push(`${u.email}: referredBy="${u.referredBy}" không khớp refCode nào, đặt referrer = null`);
   }
   const referrer = inviter && !inviter._id.equals(u._id) ? inviter._id : null;
-  const referees = all.filter((o) => o.referredBy && o.referredBy === u.refCode && !o._id.equals(u._id)).map((o) => o._id);
+  const referees = all
+    .filter((o) => o.referredBy && o.referredBy === u.refCode && !o._id.equals(u._id))
+    .map((o) => o._id);
 
   if (u.invites !== referees.length) {
     warnings.push(`${u.email}: invites=${u.invites} nhưng tìm thấy ${referees.length} người được mời — giữ nguyên invites và score`);
@@ -52,10 +54,10 @@ if (warnings.length) {
 if (ops.length === 0) {
   console.log('\nKhông có gì phải đổi.');
 } else if (apply) {
-  const res = await users.bulkWrite(ops);
+  const res = await User.bulkWrite(ops);
   console.log(`\nĐã cập nhật ${res.modifiedCount}/${all.length} user.`);
 } else {
   console.log(`\nChạy thử: ${ops.length}/${all.length} user sẽ đổi. Thêm --apply để ghi thật.`);
 }
 
-await client.close();
+await disconnectDb();

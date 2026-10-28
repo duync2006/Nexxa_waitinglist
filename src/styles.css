@@ -131,6 +131,11 @@ button:disabled { opacity: 0.6; cursor: not-allowed; }
 .chip[aria-pressed='true'] { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(92,116,242,0.25); }
 .chip-t { font-weight: 800; letter-spacing: 0.02em; }
 .chip-n { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 140px; }
+.chip-p { flex-shrink: 0; font-size: 12px; font-weight: 700; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+/* Mã quá tiền hoặc chưa có giá: làm mờ và chặn bấm. Vẫn giữ nguyên trong danh sách để
+   người dùng thấy mã đó tồn tại, chỉ là chưa với tới được. */
+.chip-off { opacity: 0.4; cursor: not-allowed; }
+.chip-off:active { cursor: not-allowed; }
 .chip.picked { position: relative; cursor: default; border-color: var(--accent); }
 /* Tag phân loại ở góc trên bên phải chip đã chọn. Chỉ mã VIP có tag; không tag nghĩa là Standard.
    Màu lấy theo hạng GOLD (pool VIP = rổ VN30) để khớp với tier pill ở màn hình kết quả. */
@@ -141,6 +146,14 @@ button:disabled { opacity: 0.6; cursor: not-allowed; }
 .dropzone { display: flex; flex-wrap: wrap; align-content: flex-start; flex-shrink: 0; gap: 18px 8px; min-height: 60px; padding: 16px; border-radius: 16px; border: 2px dashed var(--input-line); background: var(--bg); transition: border-color 0.15s ease, background 0.15s ease; }
 .dropzone.over { border-color: var(--accent); background: var(--surface); }
 .dropzone-empty { align-self: center; width: 100%; text-align: center; font-size: 14px; color: var(--muted-2); }
+/* Thanh ngân sách: luôn thấy được còn bao nhiêu tiền trước khi bấm thêm một mã nữa */
+.reserve-budget { display: flex; flex-direction: column; flex-shrink: 0; gap: 6px; }
+.reserve-budget-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; min-width: 0; }
+.reserve-budget-head .muted-13 { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.reserve-budget-num { flex-shrink: 0; font-size: 14px; font-weight: 800; font-variant-numeric: tabular-nums; }
+/* .bar-fill không có màu mặc định — các chỗ khác truyền background qua style inline */
+.reserve-budget .bar-fill { background: var(--accent); }
+
 .reserve-foot { display: flex; flex-direction: column; gap: 10px; }
 /* Chữ dẫn chiếm trọn một dòng, "Đăng ký ngay" xuống dòng dưới và dạt phải. Nút dùng padding
    bù bằng margin âm để vùng chạm vẫn đủ 44px mà không làm cao thêm khối — min-height 44px của
@@ -277,12 +290,19 @@ button:disabled { opacity: 0.6; cursor: not-allowed; }
 .chart { display: flex; gap: 10px; }
 .y-axis { display: flex; flex-direction: column; justify-content: space-between; height: var(--chart-h); margin: -8px 0; font-size: 12px; line-height: 16px; color: var(--muted-2); text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .chart-plot { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.chart-area { position: relative; }
 .chart-plot svg { display: block; width: 100%; height: var(--chart-h); overflow: visible; }
 .x-axis { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted-2); font-variant-numeric: tabular-nums; }
-.x-title { align-self: center; font-size: 13px; color: var(--muted); }
-.legend { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px 24px; font-size: 13px; color: var(--ink-2); }
-.legend span { display: inline-flex; align-items: center; gap: 8px; }
-.legend i { width: 14px; height: 4px; border-radius: 2px; display: inline-block; }
+/* Chấm và nhãn ở cuối đường: vẽ bằng HTML chứ không nhét vào SVG, vì SVG kéo giãn tự do
+   (preserveAspectRatio="none") sẽ bóp méo cả chữ lẫn hình tròn. */
+.chart-dot { position: absolute; right: 0; width: 7px; height: 7px; margin: 0 -3px -3px 0; border-radius: 50%; }
+.chart-end { position: absolute; right: 6px; font-size: 12px; font-weight: 700; white-space: nowrap; font-variant-numeric: tabular-nums; pointer-events: none; }
+.chart-end-up { margin-bottom: 8px; }
+.chart-end-down { margin-bottom: -22px; }
+.legend { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 16px; font-size: 13px; color: var(--ink-2); margin-bottom: 10px; }
+.legend-unit { color: var(--muted-2); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.legend i { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
 
 .sliders { display: flex; flex-wrap: wrap; gap: 20px 32px; padding-top: 20px; border-top: 1px solid var(--line-2); }
 .slider { flex: 1 1 240px; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
@@ -308,9 +328,9 @@ button:disabled { opacity: 0.6; cursor: not-allowed; }
   .chart-plot { gap: 4px; }
   .y-axis { font-size: 11px; line-height: 14px; margin: -7px 0; }
   .x-axis { font-size: 11px; }
-  .x-title { font-size: 11px; }
-  .legend { font-size: 11px; gap: 2px 14px; }
-  .legend i { width: 12px; }
+  .chart-end { font-size: 11px; }
+  .legend { font-size: 11px; gap: 2px 12px; }
+  .legend i { width: 9px; height: 9px; }
   .sliders { gap: 8px; padding-top: 8px; }
   .slider { flex-basis: 100%; gap: 1px; }
   .slider-head label { font-size: 13px; }

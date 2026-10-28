@@ -202,9 +202,9 @@ function Result({ me, returning, onReset, onOpenReserve }) {
   //   nextBody = 'và nhận cổ phiếu COPPER trị giá 40.000đ.';
   // }
 
-  const tier = myTier
-    ? { label: myTier.label, fg: myTier.fg, bg: myTier.bg }
-    : { label: 'NGOÀI TOP 1.000', fg: '#374151', bg: '#ECEFF3' };
+  // tierOfRank luôn trả về một bậc: top 1.000 hoặc sau top 1.000. Không còn
+  // trường hợp "không có quà" như bảng TIERS cũ.
+  const tier = { label: myTier.label, fg: myTier.fg, bg: myTier.bg };
 
   async function copy() {
     try { await navigator.clipboard.writeText(refUrl); } catch { /* bỏ qua */ }
@@ -240,18 +240,11 @@ function Result({ me, returning, onReset, onOpenReserve }) {
         <span className="tier-pill" style={{ background: tier.bg, color: tier.fg }}>{tier.label}</span>
       </div>
 
-      {myTier ? (
-        <div className="gift-box" style={{ background: myTier.bg }}>
-          <span className="gift-kicker" style={{ color: myTier.fg }}>Phần quà dự kiến</span>
-          <span className="gift-value">Cổ phiếu trị giá {vnd(myTier.value)}</span>
-          <span className="gift-group">{myTier.group}</span>
-        </div>
-      ) : (
-        <div className="gift-box neutral">
-          <span className="gift-full">1.000 suất quà đã có chủ</span>
-          <span className="gift-group">Bạn vẫn giữ chỗ trong waitlist và được dùng Nexxa sớm. Leo vào top 1.000 để nhận cổ phiếu.</span>
-        </div>
-      )}
+      <div className="gift-box" style={{ background: myTier.bg }}>
+        <span className="gift-kicker" style={{ color: myTier.fg }}>Phần quà dự kiến</span>
+        <span className="gift-value">Cổ phiếu trị giá {vnd(myTier.budget)}</span>
+        <span className="gift-group">{myTier.group}</span>
+      </div>
 
 
       <div className="invite">
