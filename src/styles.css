@@ -20,6 +20,12 @@
   --grid: #E8EBEF;
   --axis: #C9CED6;
   --kpi-good-label: #166534;
+  /* Thẻ giá trên chip cổ phiếu, tông vàng — cùng hệ màu với .chip-tag của VIP. */
+  --tag-bg: #FFF3D1;
+  --tag-ink: #7A5600;
+  --tag-line: #E3B33D;
+  --tag-fill: #E3B33D;
+  --tag-on: #3D2A00;
 }
 
 /* Chế độ tối: nền tối, chữ màu lime green */
@@ -45,6 +51,12 @@
   --grid: #26331F;
   --axis: #3B4D2F;
   --kpi-good-label: #A3E635;
+  /* Vàng kéo tối lại cho hợp nền dark, vẫn là vàng chứ không ngả nâu. */
+  --tag-bg: #3A2E0C;
+  --tag-ink: #FBD34D;
+  --tag-line: #7A5F18;
+  --tag-fill: #FBD34D;
+  --tag-on: #2A1F00;
 }
 
 * { box-sizing: border-box; }
@@ -89,7 +101,7 @@ button:disabled { opacity: 0.6; cursor: not-allowed; }
 .muted-14 { font-size: 14px; color: var(--muted); }
 .muted-13 { font-size: 13px; color: var(--muted); }
 .muted-sm { font-size: 14px; color: var(--muted-2); }
-.eyebrow { align-self: flex-start; font-size: 13px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
+.eyebrow { align-self: flex-start; font-size: 13px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink); }
 .h2 { font-size: 24px; font-weight: 700; letter-spacing: -0.01em; }
 .h2-sm { font-size: 18px; font-weight: 700; }
 .h2-card { font-size: 22px; font-weight: 700; letter-spacing: -0.01em; }
@@ -100,7 +112,7 @@ button:disabled { opacity: 0.6; cursor: not-allowed; }
 /* Header */
 .header { padding-top: 10px; padding-bottom: 2px; display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
 .brand { display: flex; align-items: center; gap: 10px; }
-.brand-name { font-size: 22px; font-weight: 800; letter-spacing: -0.02em; }
+.brand-logo { display: block; height: 32px; width: auto; }
 .header-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .theme-toggle { width: 40px; height: 40px; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; padding: 0; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); color: var(--ink); cursor: pointer; }
 .theme-toggle:hover { background: var(--bg); }
@@ -108,11 +120,11 @@ button:disabled { opacity: 0.6; cursor: not-allowed; }
 /* Modal Reserve */
 .modal-backdrop { position: fixed; inset: 0; z-index: 50; display: flex; align-items: center; justify-content: center; padding: 10px; background: rgba(8,12,20,0.55); }
 .modal { width: 100%; max-width: 880px; max-height: calc(100vh - 32px); overflow-y: auto; display: flex; flex-direction: column; gap: 20px; padding: clamp(18px, 3vw, 28px); border-radius: 20px; background: var(--surface); border: 1px solid var(--line); box-shadow: 0 24px 64px rgba(0,0,0,0.25); }
-.modal-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.modal-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-top: -12px }
 .icon-btn { width: 36px; height: 36px; flex-shrink: 0; border: 1px solid var(--line); border-radius: 999px; background: var(--bg); color: var(--ink); font-size: 20px; line-height: 1; cursor: pointer; }
-.reserve-pools { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; }
+.reserve-pools { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 8px; }
 .pool { display: flex; flex-direction: column; gap: 12px; padding: 16px; border-radius: 16px; border: 1px solid var(--line); background: var(--bg); min-width: 0; }
-.pool-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; min-width: 0; }
+.pool-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; min-width: 0; margin-top: -8px; margin-bottom: -2px; }
 .pool-title { flex-shrink: 0; font-size: 16px; font-weight: 800; }
 .pool-head .muted-13 { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 /* Danh sách mã cuộn trong khung cố định — khoảng 5 hàng chip, đủ thấy là còn nội dung bên dưới.
@@ -120,18 +132,27 @@ button:disabled { opacity: 0.6; cursor: not-allowed; }
 /* Thanh cuộn native bị ẩn hẳn và thay bằng .pool-bar do ReserveModal tự vẽ: trên mobile thanh
    native luôn là overlay tự mờ đi khi ngừng cuộn, ::-webkit-scrollbar không can thiệp được. */
 .pool-scroll { position: relative; }
-.pool-chips { display: flex; flex-wrap: wrap; align-content: flex-start; gap: 8px; max-height: 140px; padding-right: 14px; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; -ms-overflow-style: none; }
+.pool-chips { display: flex; flex-wrap: wrap; align-content: flex-start; column-gap: 16px; row-gap: 8px; max-height: 140px; padding-right: 20px; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; -ms-overflow-style: none; }
 .pool-chips::-webkit-scrollbar { display: none; }
 .pool-bar { position: absolute; top: 0; right: 0; width: 8px; height: 100%; border-radius: 4px; background: var(--bg); pointer-events: none; }
 .pool-bar-thumb { width: 8px; border-radius: 4px; background: var(--muted-2); cursor: grab; pointer-events: auto; touch-action: none; transition: background 0.15s ease; }
 .pool-bar-thumb:hover { background: var(--muted); }
 .pool-bar-thumb:active { background: var(--muted); cursor: grabbing; }
-.chip { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; min-height: 36px; padding: 6px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); color: var(--ink); font-size: 14px; cursor: grab; user-select: none; -webkit-user-drag: element; }
+.chip { position: relative; display: inline-flex; align-items: center; gap: 6px; max-width: 100%; min-height: 36px; padding: 6px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); color: var(--ink); font-size: 14px; cursor: grab; user-select: none; -webkit-user-drag: element; }
 .chip:active { cursor: grabbing; }
 .chip[aria-pressed='true'] { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(92,116,242,0.25); }
 .chip-t { font-weight: 800; letter-spacing: 0.02em; }
 .chip-n { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 140px; }
-.chip-p { flex-shrink: 0; font-size: 12px; font-weight: 700; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+/* Giá là huy hiệu vàng nằm giữa cạnh phải chip, cùng kiểu viền-nền với .chip-tag của VIP.
+   Vẫn nằm trong luồng flex nên .chip tự canh giữa theo chiều dọc và tự nới rộng vừa đủ —
+   đặt absolute thì huy hiệu sẽ phủ lên tên công ty, vì chip không biết chừa chỗ cho nó.
+   margin-right âm đẩy huy hiệu nhô ra khỏi mép chip đúng 6px như tag VIP.
+   tabular-nums để các cột số thẳng hàng. */
+.chip-p { flex-shrink: 0; margin-left: 2px; margin-right: -5px; padding: 1px 7px; border: 1px solid var(--tag-line); border-radius: 10px; background: var(--tag-bg); color: var(--tag-ink); font-size: 10px; font-weight: 800; letter-spacing: 0.02em; line-height: 1.5; white-space: nowrap; font-variant-numeric: tabular-nums; }
+/* Mã đã chọn: huy hiệu tô đặc cho nổi hẳn khỏi hàng chưa chọn. */
+.chip[aria-pressed='true'] .chip-p { border-color: var(--tag-fill); background: var(--tag-fill); color: var(--tag-on); }
+/* Chưa có giá trong snapshot thì để chìm — không có số thì không có gì để khoe. */
+.chip-p-none { border-color: var(--line); background: var(--surface); color: var(--muted); font-weight: 700; }
 /* Mã quá tiền hoặc chưa có giá: làm mờ và chặn bấm. Vẫn giữ nguyên trong danh sách để
    người dùng thấy mã đó tồn tại, chỉ là chưa với tới được. */
 .chip-off { opacity: 0.4; cursor: not-allowed; }
@@ -143,11 +164,11 @@ button:disabled { opacity: 0.6; cursor: not-allowed; }
 .chip-x { border: 0; background: none; color: var(--ink); font-size: 16px; line-height: 1; padding: 0 0 0 2px; cursor: pointer; }
 /* flex-shrink: 0 là bắt buộc: min-height đã ghi đè min-height:auto của flex item, nên nếu không
    khoá lại thì .modal (flex column có max-height) sẽ bóp ô này còn 96px và chip tràn ra ngoài khung. */
-.dropzone { display: flex; flex-wrap: wrap; align-content: flex-start; flex-shrink: 0; gap: 18px 8px; min-height: 60px; padding: 16px; border-radius: 16px; border: 2px dashed var(--input-line); background: var(--bg); transition: border-color 0.15s ease, background 0.15s ease; }
+.dropzone { display: flex; flex-wrap: wrap; align-content: flex-start; flex-shrink: 0; gap: 18px 8px; min-height: 50px; padding: 16px; border-radius: 16px; border: 2px dashed var(--input-line); background: var(--bg); transition: border-color 0.15s ease, background 0.15s ease; }
 .dropzone.over { border-color: var(--accent); background: var(--surface); }
 .dropzone-empty { align-self: center; width: 100%; text-align: center; font-size: 14px; color: var(--muted-2); }
 /* Thanh ngân sách: luôn thấy được còn bao nhiêu tiền trước khi bấm thêm một mã nữa */
-.reserve-budget { display: flex; flex-direction: column; flex-shrink: 0; gap: 6px; }
+.reserve-budget { display: flex; flex-direction: column; flex-shrink: 0; gap: px; }
 .reserve-budget-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; min-width: 0; }
 .reserve-budget-head .muted-13 { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .reserve-budget-num { flex-shrink: 0; font-size: 14px; font-weight: 800; font-variant-numeric: tabular-nums; }
@@ -180,7 +201,7 @@ button:disabled { opacity: 0.6; cursor: not-allowed; }
 .hero-copy .eyebrow { align-self: center; }
 /* Chia đều độ dài các dòng khi chữ xuống hàng, tránh một từ rớt lẻ loi ở dòng cuối khi căn giữa. */
 .hero-copy .eyebrow, .hero h1, .hero .lead { text-wrap: balance; }
-.hero h1 .h1-accent { display: block; color: var(--accent); }
+.hero h1 .h1-accent { display: block; color: var(--ink); }
 .lead-kicker { display: block; color: var(--ink); font-weight: 800; letter-spacing: 0.01em; }
 
 /* Card */
@@ -298,7 +319,8 @@ button:disabled { opacity: 0.6; cursor: not-allowed; }
 .chart-dot { position: absolute; right: 0; width: 7px; height: 7px; margin: 0 -3px -3px 0; border-radius: 50%; }
 .chart-end { position: absolute; right: 6px; font-size: 12px; font-weight: 700; white-space: nowrap; font-variant-numeric: tabular-nums; pointer-events: none; }
 .chart-end-up { margin-bottom: 8px; }
-.chart-end-down { margin-bottom: -22px; }
+/* Khi hai đường sát nhau, nhãn danh mục leo thêm một nấc để không đè nhãn tiền gốc */
+.chart-end-stacked { margin-bottom: 26px; }
 .legend { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 16px; font-size: 13px; color: var(--ink-2); margin-bottom: 10px; }
 .legend-unit { color: var(--muted-2); }
 .legend span { display: inline-flex; align-items: center; gap: 6px; }
@@ -348,7 +370,7 @@ button:disabled { opacity: 0.6; cursor: not-allowed; }
    không phải đọc ra "ngoặc vuông", chỉ đọc đúng nội dung. */
 .reward-list { list-style: none; margin: 0; padding: 5px; display: grid; grid-template-columns: 1fr; gap: 8px; }
 .reward { display: flex; flex-direction: column; gap: 1px; padding: 7px 12px; border-radius: 10px; background: var(--surface); border: 1px solid var(--line); }
-.reward-title { font-size: 15px; font-weight: 700; line-height: 1.55; color: var(--accent); }
+.reward-title { font-size: 15px; font-weight: 700; line-height: 1.55; color: var(--ink); }
 .reward-title::before { content: '[ '; }
 .reward-title::after { content: ' ]'; }
 .reward-body { display: flex; gap: 6px; font-size: 15px; line-height: 1.4; color: var(--muted); }
@@ -366,11 +388,11 @@ button:disabled { opacity: 0.6; cursor: not-allowed; }
 .footer-terms { flex: 1 1 420px; min-width: 0; }
 
 /* Điện thoại: header phải nằm gọn một dòng. Nội dung đo được 382px trong khi chỉ có 378px,
-   nên thu nhỏ tên thương hiệu + pill và cấm xuống dòng; pill tự cắt bớt nếu vẫn thiếu chỗ. */
+   nên thu nhỏ logo + pill và cấm xuống dòng; pill tự cắt bớt nếu vẫn thiếu chỗ. */
 @media (max-width: 480px) {
   .header { flex-wrap: nowrap; gap: 10px; }
   .brand { flex-shrink: 0; }
-  .brand-name { font-size: 18px; }
+  .brand-logo { height: 26px; }
   .header-actions { min-width: 0; gap: 8px; flex-wrap: nowrap; }
   .pill-status { min-width: 0; padding: 6px 10px; font-size: 12px; }
   .pill-status span:last-child { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }

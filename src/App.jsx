@@ -54,8 +54,7 @@ export default function App() {
     <div className="page">
       <header className="container header">
         <div className="brand">
-          <Logo />
-          <span className="brand-name">Nexxa</span>
+          <Logo theme={theme} />
         </div>
         <div className="header-actions">
           <div className="pill-status">

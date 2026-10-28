@@ -250,7 +250,9 @@ export default function ReserveModal({ open, onClose, me, onGoSignup }) {
                       >
                         <span className="chip-t">{s.t}</span>
                         <span className="chip-n">{s.n}</span>
-                        <span className="chip-p">{typeof price === 'number' ? vnd(price) : '—'}</span>
+                        <span className={`chip-p${typeof price === 'number' ? '' : ' chip-p-none'}`}>
+                          {typeof price === 'number' ? vnd(price) : '—'}
+                        </span>
                       </button>
                     );
                   })}

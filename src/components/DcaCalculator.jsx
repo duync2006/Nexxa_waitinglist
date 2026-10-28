@@ -54,6 +54,11 @@ export default function DcaCalculator() {
       // SVG: SVG đang preserveAspectRatio="none" nên chữ đặt bên trong sẽ bị kéo méo.
       endValue: (finalV / maxV) * 100,
       endCash: (paid / maxV) * 100,
+      // Hai nhãn cuối đường đều nằm PHÍA TRÊN đường của mình. Khi lợi nhuận thấp, hai
+      // đường sát nhau (bằng 0% thì trùng hẳn) nên nhãn danh mục phải leo cao thêm một
+      // nấc, nếu không hai con số đè lên nhau. 20% chiều cao khung ≈ 18px ở bản mobile,
+      // vừa đủ cho một dòng chữ 16px.
+      stackEnds: (finalV - paid) / maxV < 0.2,
       multiple: (finalV / paid).toLocaleString('vi-VN', { maximumFractionDigits: 1 })
     };
   }, [C, R, N]);
@@ -113,12 +118,17 @@ export default function DcaCalculator() {
                   <path d={calc.cash} fill="none" stroke={CASH} strokeWidth="2.5" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
                 </svg>
                 {/* Nhãn giá trị ngay ở cuối mỗi đường, khỏi phải dóng mắt sang trục bên trái.
-                    Nhãn danh mục đặt phía trên chấm, nhãn tiền gốc phía dưới, để lúc hai đường
-                    trùng nhau (lợi nhuận 0%) chúng không chồng lên nhau. */}
+                    Cả hai đặt PHÍA TRÊN đường của mình: đặt nhãn tiền gốc xuống dưới sẽ đè
+                    lên đáy biểu đồ và hàng trục năm ở bản mobile (khung chỉ cao 92px). */}
                 <span className="chart-dot" style={{ bottom: `${calc.endValue}%`, background: 'var(--accent)' }} />
                 <span className="chart-dot" style={{ bottom: `${calc.endCash}%`, background: CASH }} />
-                <span className="chart-end chart-end-up" style={{ bottom: `${calc.endValue}%`, color: 'var(--accent)' }}>{money(calc.finalV)}</span>
-                <span className="chart-end chart-end-down" style={{ bottom: `${calc.endCash}%`, color: CASH }}>{money(calc.paid)}</span>
+                <span
+                  className={`chart-end chart-end-up${calc.stackEnds ? ' chart-end-stacked' : ''}`}
+                  style={{ bottom: `${calc.endValue}%`, color: 'var(--accent)' }}
+                >
+                  {money(calc.finalV)}
+                </span>
+                <span className="chart-end chart-end-up" style={{ bottom: `${calc.endCash}%`, color: CASH }}>{money(calc.paid)}</span>
               </div>
               <div className="x-axis">
                 {calc.xTicks.map((t, i) => <span key={t}>{t}{i === calc.xTicks.length - 1 ? ' năm' : ''}</span>)}
@@ -128,7 +138,9 @@ export default function DcaCalculator() {
         </div>
 
         <div className="sliders">
-          <Slider id="calc-c" label="Monthly Investment" valueText={vnd(C)} min={50000} max={5000000} step={50000} value={C} onChange={(v) => setC(v || 50000)} minText="50.000đ" maxText="5 triệu" />
+          {/* onChange nhận thẳng v, KHÔNG dùng `v || 50000`: min đã là 0 nên phép `||` sẽ
+              biến 0 thành 50.000 và thanh trượt không bao giờ kéo về đầu được. */}
+          <Slider id="calc-c" label="Monthly Investment" valueText={vnd(C)} min={0} max={2000000} step={10000} value={C} onChange={setC} minText="0đ" maxText="2M VNĐ" />
           <Slider id="calc-r" label="Growth Rate" valueText={`${R}%`} min={0} max={20} step={1} value={R} onChange={(v) => setR(v || 0)} minText="0%" maxText="20%" />
           <Slider id="calc-n" label="Investment Period" valueText={`${fmt(N)} years`} min={1} max={40} step={1} value={N} onChange={(v) => setN(v || 1)} minText="1 year" maxText="40 years" />
         </div>
