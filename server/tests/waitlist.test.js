@@ -19,7 +19,50 @@ describe('GET /api/stats', () => {
     const res = await request(app).post('/api/stats');
 
     assert.equal(res.status, 200);
-    assert.deepEqual(res.body, { registered: 1, totalSlots: 1000, remaining: 999 });
+    const { recent, ...counts } = res.body;
+    assert.deepEqual(counts, { registered: 1, totalSlots: 1000, remaining: 999, last24h: 1 });
+    assert.equal(recent.length, 1);
+  });
+
+  it('recent che khúc giữa email và không trả email gốc', async () => {
+    await joinViaApi(request, app, 'nguyenvana@gmail.com');
+
+    const res = await request(app).post('/api/stats');
+
+    assert.deepEqual(res.body.recent.map((r) => r.masked), ['ng•••••a@gmail.com']);
+    // Quan trọng hơn cả định dạng: email gốc không được nằm ở BẤT KỲ đâu trong response,
+    // kể cả một trường thừa ai đó thêm vào sau này.
+    assert.ok(!JSON.stringify(res.body).includes('nguyenvana'));
+  });
+
+  it('recent sắp người đăng ký mới nhất lên trước', async () => {
+    await User.insertMany([
+      { email: 'cu@test.local', refCode: 'OLD001', joinIndex: 1, score: 1, invites: 0, createdAt: new Date(Date.now() - 60_000) },
+      { email: 'moi@test.local', refCode: 'NEW001', joinIndex: 2, score: 2, invites: 0, createdAt: new Date() }
+    ]);
+
+    const res = await request(app).post('/api/stats');
+
+    // 'moi' đủ dài để giữ 1 đầu 1 cuối, 'cu' chỉ còn giữ nổi 1 ký tự
+    assert.deepEqual(res.body.recent.map((r) => r.masked), ['m••i@test.local', 'c•@test.local']);
+  });
+
+  it('last24h chỉ đếm người đăng ký trong 24 giờ gần nhất', async () => {
+    await joinViaApi(request, app, 'moi@test.local');
+    // Người cũ: createdAt lùi 2 ngày nên nằm ngoài cửa sổ đếm
+    await User.create({
+      email: 'cu@test.local',
+      refCode: 'OLD001',
+      joinIndex: 2,
+      score: 2,
+      invites: 0,
+      createdAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000)
+    });
+
+    const res = await request(app).post('/api/stats');
+
+    assert.equal(res.body.registered, 2);
+    assert.equal(res.body.last24h, 1);
   });
 
   it('remaining không âm khi đã vượt quá tổng số suất', async () => {

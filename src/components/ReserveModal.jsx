@@ -73,7 +73,7 @@ function ScrollBox({ label, children }) {
   );
 }
 
-export default function ReserveModal({ open, onClose, me, onGoSignup }) {
+export default function ReserveModal({ open, onClose, me, onGoSignup, initialBasket = [] }) {
   const [basket, setBasket] = useState([]);
   const [over, setOver] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -100,7 +100,9 @@ export default function ReserveModal({ open, onClose, me, onGoSignup }) {
         if (!alive) return;
         setOpts(o);
         // Lựa chọn đã ghi nhận trước đó hiện lại trong ô nhận, để sửa chứ không chọn lại từ đầu.
-        setBasket(o.selected ?? []);
+        // initialBasket là giỏ đã chọn ở lượt mở trước nhưng chưa kịp đăng ký — ưu tiên nó,
+        // nếu không người quay lại modal sẽ thấy ô nhận trống trơn như chưa từng chọn gì.
+        setBasket(o.selected?.length ? o.selected : initialBasket);
       })
       .catch((err) => { if (alive) setError(err.message); });
     return () => { alive = false; };
@@ -160,7 +162,7 @@ export default function ReserveModal({ open, onClose, me, onGoSignup }) {
       >
         <div className="modal-head">
           <div className="stack-4">
-            <h2 id="reserve-title" className="h2-card">Reserve cổ phiếu</h2>
+            <h2 id="reserve-title" className="h2-card">Chọn cổ phiếu bạn muốn nhận</h2>
             {/* <p className="muted-14">Kéo thả hoặc bấm vào mã để chọn vào ô nhận.</p> */}
           </div>
           <button type="button" className="icon-btn" onClick={onClose} aria-label="Đóng">×</button>
@@ -172,7 +174,7 @@ export default function ReserveModal({ open, onClose, me, onGoSignup }) {
               <span className="muted-13">
                 {/* Không liệt kê tên nhóm ở đây: chuỗi dài bị cắt trên mobile, mà các
                     nhóm được phép đã hiện thành từng mục ngay bên dưới. */}
-                {opts.preview ? 'Bản xem thử' : `Ngân sách hạng #${opts.rank ?? '—'}`}
+                {opts.preview ? 'Ngân sách dự kiến' : `Ngân sách hạng #${opts.rank ?? '—'}`}
               </span>
               <span className="reserve-budget-num">{vnd(total)} / {vnd(budget)}</span>
             </div>
@@ -205,7 +207,7 @@ export default function ReserveModal({ open, onClose, me, onGoSignup }) {
           }}
         >
           {basket.length === 0 ? (
-            <span className="dropzone-empty">Thả cổ phiếu vào đây</span>
+            <span className="dropzone-empty">Bấm vào mã bên dưới để chọn</span>
           ) : (
             basket.map((t) => (
               <span key={t} className="chip picked">
@@ -264,21 +266,27 @@ export default function ReserveModal({ open, onClose, me, onGoSignup }) {
 
 
         <div className="reserve-foot">
-          {!signedUp && (
-            <div className="reserve-hint">
-              <span className="muted-14">Đăng ký waitlist bằng email để nhận quà.</span>
-              <button type="button" className="link-btn link-accent" onClick={() => { onClose(); onGoSignup(); }}>
-                Đăng ký ngay
-              </button>
-            </div>
-          )}
           {error && <p role="alert" className="error">{error}</p>}
           {done && <p className="success-line" role="status">Đã ghi nhận {basket.length} mã cho {me.email}</p>}
           <div className="reserve-actions">
             <span className="muted-14">Đã chọn {basket.length} mã · còn {vnd(Math.max(0, left))}</span>
-            <button type="button" className="btn btn-primary" onClick={receive} disabled={!canReceive}>
-              {busy ? 'Đang ghi nhận…' : 'Nhận'}
-            </button>
+            {/* Chưa đăng ký thì nút vẫn là bước tiến tới, không phải lời từ chối. Trước đây
+                chỗ này báo "Đăng ký waitlist bằng email để nhận quà" rồi đá người dùng về
+                đầu trang với giỏ rỗng — chọn cả buổi xong quay lại vạch xuất phát. */}
+            {signedUp ? (
+              <button type="button" className="btn btn-primary" onClick={receive} disabled={!canReceive}>
+                {busy ? 'Đang ghi nhận…' : 'Nhận'}
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => onGoSignup(basket)}
+                disabled={basket.length === 0}
+              >
+                {basket.length === 0 ? 'Chọn ít nhất 1 mã' : `Giữ ${basket.length} mã này`}
+              </button>
+            )}
           </div>
         </div>
       </div>

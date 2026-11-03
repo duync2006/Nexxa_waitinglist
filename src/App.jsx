@@ -11,12 +11,16 @@ import DcaCalculator from './components/DcaCalculator.jsx';
 import HowItWorks from './components/HowItWorks.jsx';
 import ThemeToggle from './components/ThemeToggle.jsx';
 import ReserveModal from './components/ReserveModal.jsx';
+import Scarcity from './components/Scarcity.jsx';
+import JoinTicker from './components/JoinTicker.jsx';
 
 const SAVED_KEY = 'nexxa_waitlist_me';
 const THEME_KEY = 'nexxa_waitlist_theme';
 
-function loadSaved() {
-  try { return JSON.parse(localStorage.getItem(SAVED_KEY)) || null; } catch { return null; }
+// Dọn profile mà các bản trước đã ghi vào máy người dùng. Không còn khôi phục nó nữa, nên
+// để lại chỉ là email và thứ hạng của ai đó nằm trong trình duyệt mà chẳng phục vụ gì.
+function dropSavedProfile() {
+  try { localStorage.removeItem(SAVED_KEY); } catch { /* bỏ qua */ }
 }
 
 function loadTheme() {
@@ -25,12 +29,45 @@ function loadTheme() {
 
 export default function App() {
   const [registered, setRegistered] = useState(0);
-  const [me, setMe] = useState(loadSaved);
+  const [last24h, setLast24h] = useState(0);
+  // Người đăng ký gần nhất, email đã che sẵn ở server. Đi ké /api/stats nên tự làm mới
+  // theo cùng nhịp 30 giây, không thêm request nào.
+  const [recent, setRecent] = useState([]);
+  // Không khôi phục từ localStorage: tải lại trang là về form đăng ký, không phải màn kết
+  // quả của lượt trước. Trang này là trang mời đăng ký — mở lên mà thấy kết quả cũ thì nó
+  // hết làm được việc của mình, và trên máy dùng chung người sau nhìn thấy email người trước.
+  // Muốn xem lại kết quả chỉ cần nhập lại email: api.check trả về ngay, không phải nhập OTP.
+  const [me, setMe] = useState(null);
   const [theme, setTheme] = useState(loadTheme);
   const [reserveOpen, setReserveOpen] = useState(false);
+  // Giỏ cổ phiếu người chưa đăng ký đã chọn trong modal Reserve. Giữ ở App chứ không ở trong
+  // modal: modal đóng lại khi về form đăng ký, mà lựa chọn thì phải sống qua bước đó — chọn
+  // xong rồi mất giỏ là mất luôn lý do người ta điền email.
+  const [pendingBasket, setPendingBasket] = useState([]);
 
+  // Gọi lại mỗi 30 giây: con số nhúc nhích ngay trước mắt người đang đọc trang có sức ép
+  // khác hẳn một con số tĩnh nạp một lần lúc mở. Tab bị ẩn thì ngừng gọi — không ai nhìn.
   useEffect(() => {
-    api.stats().then((s) => setRegistered(s.registered)).catch(() => {});
+    let alive = true;
+    const pull = () => {
+      if (document.hidden) return;
+      api.stats()
+        .then((s) => {
+          if (!alive) return;
+          setRegistered(s.registered);
+          setLast24h(s.last24h ?? 0);
+          setRecent(s.recent ?? []);
+        })
+        .catch(() => {});
+    };
+    pull();
+    const timer = setInterval(pull, 30000);
+    document.addEventListener('visibilitychange', pull);
+    return () => {
+      alive = false;
+      clearInterval(timer);
+      document.removeEventListener('visibilitychange', pull);
+    };
   }, []);
 
   useEffect(() => {
@@ -38,18 +75,22 @@ export default function App() {
     try { localStorage.setItem(THEME_KEY, theme); } catch { /* bỏ qua */ }
   }, [theme]);
 
-  const handleJoined = (profile) => {
+  // Xoá profile còn sót từ bản cũ. Chạy một lần lúc mở trang.
+  useEffect(dropSavedProfile, []);
+
+  const handleJoined = async (profile) => {
     setMe(profile);
     setRegistered(profile.registered);
-    try { localStorage.setItem(SAVED_KEY, JSON.stringify(profile)); } catch { /* bỏ qua */ }
+
+    // Đã chọn cổ phiếu trước khi đăng ký thì ghi nhận luôn, không bắt mở lại modal chọn lần
+    // hai. Lỗi ở đây nuốt im: đăng ký đã thành công rồi, giỏ vẫn còn trong modal để thử lại.
+    if (pendingBasket.length) {
+      try { await api.reserve(profile.email, pendingBasket); } catch { /* bỏ qua */ }
+      setPendingBasket([]);
+    }
   };
 
-  const handleReset = () => {
-    setMe(null);
-    try { localStorage.removeItem(SAVED_KEY); } catch { /* bỏ qua */ }
-  };
-
-  const remaining = Math.max(0, TOTAL_SLOTS - Math.min(TOTAL_SLOTS, registered));
+  const handleReset = () => setMe(null);
 
   return (
     <div className="page">
@@ -58,19 +99,24 @@ export default function App() {
           <Logo theme={theme} />
         </div>
         <div className="header-actions">
-          <div className="pill-status">
-            <span className="dot" />
-            <span>Còn {fmt(remaining)} / {fmt(TOTAL_SLOTS)} suất quà</span>
-          </div>
           <ThemeToggle theme={theme} onToggle={() => setTheme((t) => (t === 'dark' ? 'light' : 'dark'))} />
         </div>
       </header>
+
+      {/* Ngay dưới header, trước cả headline: bằng chứng người thật đang đăng ký phải đập
+          vào mắt trước khi người đọc kịp nghi ngờ lời mời phía dưới có thật hay không. */}
+      <JoinTicker recent={recent} />
 
       <ReserveModal
         open={reserveOpen}
         onClose={() => setReserveOpen(false)}
         me={me}
-        onGoSignup={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+        initialBasket={pendingBasket}
+        onGoSignup={(basket) => {
+          setPendingBasket(basket);
+          setReserveOpen(false);
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        }}
       />
 
       <main className="container hero">
@@ -85,13 +131,23 @@ export default function App() {
               {/* Xây Dựng Tài Sản Cùng NEXXA */}
               <span className="h1-accent">Tặng Cổ Phiếu</span>
             </h1>
-            <p className="lead">
-              <strong className="lead-kicker">TOP 1.000</strong>
-              <p className="lead-content">Nhận Cổ Phiếu VIP</p>
-            </p>
-          <FeaturedStocks />
+            {/* Hai dòng là MỘT ý: ai được (điều kiện) rồi được gì (phần thưởng). Bọc chung
+                để khoảng cách giữa chúng hẹp hơn khoảng cách với h1 và khối khan hiếm —
+                để rời nhau cùng cỡ chữ thì đọc thành hai câu không liên quan. */}
+            <div className="lead-group">
+              <p className="lead-cond">{fmt(TOTAL_SLOTS)} người đăng ký NEXXA đầu tiên</p>
+              <p className="lead">Nhận cổ phiếu VIP — lên tới 10 mã</p>
+            </div>
+            <FeaturedStocks />
           </div>
-          <SignupCard me={me} onJoined={handleJoined} onReset={handleReset} onOpenReserve={() => setReserveOpen(true)} />
+          <SignupCard
+            me={me}
+            onJoined={handleJoined}
+            onReset={handleReset}
+            onOpenReserve={() => setReserveOpen(true)}
+            pendingBasket={pendingBasket}
+          />
+        <Scarcity registered={registered} total={TOTAL_SLOTS} last24h={last24h} />
         </section>
       </main>
 

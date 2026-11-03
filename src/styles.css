@@ -221,7 +221,14 @@ button:disabled { opacity: 0.6; cursor: not-allowed; }
 .hero-main { flex: 1 1 100%; min-width: 0; display: flex; flex-direction: column; gap: 10px; }
 .hero-copy { display: flex; flex-direction: column; align-items: center; gap: 16px; text-align: center; }
 .hero h1 { font-size: clamp(36px, 5vw, 60px); line-height: 1.08; font-weight: 800;  }
-.lead { font-size: clamp(16px, 1.6vw, 19px); color: var(--muted); max-width: 520px; margin-inline: auto; }
+/* Cụm điều kiện + phần thưởng dưới headline. gap 2px: hai dòng phải dính nhau thành một
+   khối, nếu lấy gap 16px của .hero-copy thì chúng trôi ra xa và mất quan hệ với nhau. */
+.lead-group { display: flex; flex-direction: column; align-items: center; gap: 2px; max-width: 58ch; margin-inline: auto; }
+/* Dòng điều kiện: nhỏ hơn và nhạt hơn dòng phần thưởng. Hai dòng cùng cỡ cùng màu thì
+   không dòng nào dẫn, mắt phải tự đoán đâu là ý chính. */
+.lead-cond { font-size: clamp(15px, 1.4vw, 17px); line-height: 1.4; font-weight: 600; letter-spacing: 0.04em; color: var(--muted); }
+/* Dòng phần thưởng, trả lời "đăng ký để được gì". Cỡ chữ lớn thứ hai trang sau h1. */
+.lead { font-size: clamp(19px, 2.1vw, 26px); line-height: 1.3; font-weight: 700; letter-spacing: 0.01em; color: var(--ink); }
 /* Dòng thứ hai của h1, tách hẳn xuống dòng và lấy màu nhấn để "Cổ Phiếu Miễn Phí" nổi lên. */
 /* text-indent bù lại khoảng cách chữ thừa ở cuối, nếu không chữ sẽ lệch trái khi căn giữa. */
 .hero-brand { font-size: clamp(40px, 6vw, 68px); font-weight: 800; line-height: 1; letter-spacing: 0.16em; text-indent: 0.16em; }
@@ -229,9 +236,10 @@ button:disabled { opacity: 0.6; cursor: not-allowed; }
 .hero-copy .eyebrow { align-self: center; }
 /* Chia đều độ dài các dòng khi chữ xuống hàng, tránh một từ rớt lẻ loi ở dòng cuối khi căn giữa. */
 .hero-copy .eyebrow, .hero h1, .hero .lead { text-wrap: balance; }
-.hero h1 .h1-accent { display: block; color: var(--ink); font-weight:600; color: var(--gray-letter); }
-.lead-kicker { display: block; color: var(--second-title); font-weight: 600; letter-spacing: 0.02em; }
-.lead-content { display: block; color: var(--third-title); font-weight: 400; }
+/* Dùng --ink chứ không phải --gray-letter: token đó chỉ khai báo ở :root sáng, không có bản
+   dark, nên ở chế độ tối headline #1E2124 nằm trên nền #0A0E08 — tương phản ~1,4:1, coi như
+   mất chữ. Ở chế độ sáng hai màu gần như trùng nhau nên giao diện không đổi. */
+.hero h1 .h1-accent { display: block; color: var(--ink); font-weight: 600; }
 /* Card */
 .card { background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: clamp(20px, 3vw, 32px); box-shadow: 0 1px 2px rgba(14,21,37,0.04), 0 12px 32px rgba(14,21,37,0.06); max-width: 560px; }
 
@@ -281,11 +289,11 @@ button:disabled { opacity: 0.6; cursor: not-allowed; }
 /* width:100% la bat buoc: .hero-copy la flex column co align-items:center, nen con khong
    gian theo container ma co theo noi dung cua chinh no — o day la ca track 3888px, lam
    overflow:hidden ben duoi mat tac dung va dai the tran ra ngoai mep man hinh. */
-.featured { min-width: 0; width: 100%; display: flex; flex-direction: column; gap: 0px; }
+.featured { min-width: 0; width: 100%; display: flex; flex-direction: column; gap: 0px; margin-top: -15px }
 .featured-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex-wrap: wrap; }
 .featured-title { font-size: 16px; font-weight: 700; }
-/* Cuộn ngang thật, không phải animation: FeaturedStocks.jsx tự đẩy scrollLeft mỗi khung
-   hình. Nhờ vậy ngón tay vuốt được, và trình duyệt chỉ vẽ phần đang nhìn thấy thay vì giữ
+/* Cuộn ngang thật, không phải animation: hook useMarquee tự đẩy scrollLeft mỗi khung
+   hình (useMarquee.js). Nhờ vậy ngón tay vuốt được, và trình duyệt chỉ vẽ phần đang nhìn thấy thay vì giữ
    một lớp composite rộng gần 4000px.
    KHÔNG được bỏ rule này: thiếu overflow ở đây là dải thẻ không bị cắt, tràn ra ngoài và
    đè lên nội dung bên dưới.
@@ -300,15 +308,27 @@ button:disabled { opacity: 0.6; cursor: not-allowed; }
   scroll-behavior: auto;
   overscroll-behavior-x: contain;
   scrollbar-width: none;
+  /* Mép mờ co theo bề rộng: 56px cố định ăn mất gần 30%% một màn 390px. */
+  --fade: min(56px, 8vw);
+  /* Làm mờ dần hai mép thay vì cắt cụt giữa thẻ. Không có nó thì mép trái luôn hiện một
+     thẻ bị xén dở kèm cái tag VIP lơ lửng — trông như lỗi layout chứ không phải dải trượt.
+     Mask chỉ theo chiều ngang nên tag VIP nhô lên trên cạnh thẻ vẫn nguyên vẹn. */
+  -webkit-mask-image: linear-gradient(to right, transparent 0, #000 var(--fade), #000 calc(100% - var(--fade)), transparent 100%);
+  mask-image: linear-gradient(to right, transparent 0, #000 var(--fade), #000 calc(100% - var(--fade)), transparent 100%);
 }
 .featured-scroll::-webkit-scrollbar { display: none; }
 .featured-track { display: flex; width: max-content; }
 /* padding-right PHẢI bằng gap: điểm nối giữa hai nhóm lấy khoảng cách từ padding này, lệch
    một chút là cứ mỗi vòng lại thấy một cặp thẻ sát vào nhau. */
 .featured-group { display: flex; gap: var(--featured-gap); padding-right: var(--featured-gap); }
-.featured-item { position: relative; flex: 0 0 130px; display: flex; flex-direction: column; gap: 4px; padding: 14px; border-radius: 14px; background: var(--surface); border: 1px solid var(--line); }
-.featured-t { font-size: 18px; font-weight: 800; letter-spacing: 0.02em; color: var(--accent); }
-.featured-n { font-size: 14px; font-weight: 600; }
+.featured-item { position: relative; flex: 0 0 116px; display: flex; flex-direction: column; gap: 1px; padding: 9px 11px; border-radius: 11px; background: var(--surface); border: 1px solid var(--line); }
+.featured-t { font-size: 15px; font-weight: 800; letter-spacing: 0.02em; color: var(--accent); }
+/* Một dòng, cắt bằng ellipsis: tên dài như "Cơ điện lạnh REE" trước đây xuống hai dòng nên
+   thẻ cao thấp lệch nhau, dải trượt nhìn như răng cưa. Tên đầy đủ nằm ở title của thẻ. */
+.featured-n { font-size: 11px; font-weight: 600; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* Giá để màu --ink chứ không mượn tông vàng của .chip-tag: vàng đang là dấu hiệu riêng của
+   nhóm VIP, dùng cho cả giá thì mã Standard cũng trông như VIP. */
+.featured-p { margin-top: 3px; font-size: 12.5px; font-weight: 700; letter-spacing: 0.01em; color: var(--ink); }
 .tiers-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
 .tier-card { display: flex; flex-direction: column; gap: 12px; padding: 18px; border-radius: 16px; background: var(--surface); border: 1.5px solid var(--line); }
 .tier-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
@@ -316,10 +336,58 @@ button:disabled { opacity: 0.6; cursor: not-allowed; }
 .tier-range { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .tier-value { font-size: 24px; font-weight: 800; letter-spacing: -0.02em; }
 .tier-group { font-size: 14px; color: var(--ink-2); }
+/* Nhắc lại giỏ cổ phiếu đã chọn, ngay trên ô email. Nền nhạt màu nhấn để nó đọc như một
+   việc đang dở chứ không phải một dòng chú thích. */
+.basket-note { padding: 10px 14px; border-radius: 12px; background: var(--good-bg); border: 1px solid var(--line); font-size: 14px; line-height: 1.5; color: var(--muted); }
+
+/* Khối khan hiếm ở hero. Bề rộng bám theo .lead ngay trên nó để hai dòng thành một cụm:
+   giá trị rồi tới số suất còn lại, đọc liền một mạch. */
+/* margin-top thêm vào gap của .hero-copy: khối khan hiếm là một đơn vị riêng, cách cụm chữ
+   bên trên rộng hơn khoảng cách giữa hai dòng trong cụm đó. */
+.scarcity { display: flex; flex-direction: column; align-items: center; gap: 8px; width: 100%; max-width: 58ch; margin-top: 2px; margin-inline: auto; margin-bottom: -40px; }
+.scarcity-line { display: flex; align-items: baseline; gap: 7px; }
+.scarcity-num { font-size: clamp(17px, 1.7vw, 20px); font-weight: 700; color: var(--accent); letter-spacing: 0.01em; }
+.scarcity-of { font-size: 15px; color: var(--muted); }
+.scarcity-bar { width: 100%; max-width: 320px; }
+.scarcity .bar-fill { background: var(--accent); }
+.scarcity-rate { font-size: 14px; color: var(--muted); }
+
 .bar { height: 6px; border-radius: 3px; background: var(--bar-track); overflow: hidden; }
 .bar-fill { height: 100%; border-radius: 3px; transition: width 0.4s ease; }
 .tier-foot { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .anchor { align-self: flex-start; min-height: 44px; display: inline-flex; align-items: center; font-size: 14px; }
+
+
+/* Dải người vừa tham gia, nằm ngay dưới header trong .container nên thẳng hàng với hero,
+   form đăng ký và bảng phần thưởng. Viền kín + bo góc chứ không phải viền trên/dưới kéo
+   hết màn hình: khi đã thu về đúng bề ngang nội dung, hai vạch cụt lửng lơ giữa không
+   trông như layout bị cắt dở. Cùng ngôn ngữ thẻ với .reward-table và .featured-item. */
+.ticker-wrap { margin-top: 7px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); overflow: hidden; }
+/* Cùng cơ chế với .featured-scroll: cuộn ngang thật do useMarquee đẩy scrollLeft.
+   scroll-behavior: auto bắt buộc — html đang đặt 'smooth', để nó áp vào đây thì mỗi lần
+   JS gán scrollLeft trình duyệt lại chạy hoạt ảnh cuộn riêng, chống nhau với vòng lặp. */
+.ticker {
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 7px 0;
+  scroll-behavior: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+  --fade: min(48px, 8vw);
+  -webkit-mask-image: linear-gradient(to right, transparent 0, #000 var(--fade), #000 calc(100% - var(--fade)), transparent 100%);
+  mask-image: linear-gradient(to right, transparent 0, #000 var(--fade), #000 calc(100% - var(--fade)), transparent 100%);
+}
+.ticker::-webkit-scrollbar { display: none; }
+.ticker-track { display: flex; width: max-content; }
+/* padding-right PHẢI bằng gap, nếu không cứ mỗi vòng lại thấy một cặp mục sát vào nhau
+   ở đúng điểm nối giữa hai nhóm. */
+.ticker-group { display: flex; gap: 28px; padding-right: 28px; }
+.ticker-item { display: flex; align-items: center; gap: 7px; white-space: nowrap; font-size: 13px; line-height: 1.5; }
+.ticker-dot { width: 6px; height: 6px; flex-shrink: 0; border-radius: 50%; background: var(--accent); }
+/* Email dùng font đều chữ: các dấu chấm che khúc giữa xếp thành một khối gọn thay vì
+   co giãn lệch nhau, nhìn ra ngay đây là email thật bị che chứ không phải chữ bị lỗi. */
+.ticker-email { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 12.5px; font-weight: 600; letter-spacing: 0; color: var(--ink); }
+.ticker-verb { color: var(--muted); }
 
 /* Sections */
 .section { padding-top: 32px; padding-bottom: 32px; display: flex; flex-direction: column; gap: 20px; }
@@ -406,23 +474,41 @@ button:disabled { opacity: 0.6; cursor: not-allowed; }
 }
 
 /* How it works */
-/* Chương trình thưởng: một cột như bản phác. Trên điện thoại mười thẻ phải vừa đúng một
-   screen nên padding và cỡ chữ đều nén lại; từ 720px trở lên thẻ được nới ra như cũ,
-   và chia hai cột vì mười mục chữ ngắn trải hết bề ngang desktop thì thẻ nào cũng rỗng.
-   Dấu ngoặc và dấu chấm đầu dòng đặt bằng CSS ::before/::after để trình đọc màn hình
-   không phải đọc ra "ngoặc vuông", chỉ đọc đúng nội dung. */
-.reward-list { list-style: none; margin: 0; padding: 5px; display: grid; grid-template-columns: 1fr; gap: 8px; }
-.reward { display: flex; flex-direction: column; gap: 1px; padding: 7px 12px; border-radius: 10px; background: var(--reward); border: 1px solid var(--line-3); }
-.reward-title { font-size: clamp(16px, 1.6vw, 19px);; font-weight: 700; line-height: 1.55; color: var(--second-title); }
-.reward-title::before { content: '[ '; }
-.reward-title::after { content: ' ]'; }
-.reward-body { display: flex; gap: 6px; font-size: 15px; line-height: 1.4; color: var(--second-title); }
-.reward-body::before { content: '•'; flex-shrink: 0; color: var(--accent); }
+/* Chương trình thưởng, ba tầng độ nặng giảm dần:
+   1. Bảng "ai → được gì" — phần thưởng, thứ duy nhất đáng để người ta điền email.
+   2. Dải chip — cơ chế, giải thích cách lên top chứ không phải quà.
+   3. Một dòng chữ nhỏ — điều kiện, phải có mặt nhưng không được tranh chỗ.
+   Dùng --line-2 làm vạch chia chứ không phải --line-3: --line-3 chỉ khai báo trong :root
+   sáng, dark mode không có bản thay nên vạch sẽ sáng trắng trên nền tối. */
+.reward-table { list-style: none; margin: 0; padding: 0; border: 1px solid var(--line); border-radius: 14px; overflow: hidden; background: var(--surface); }
+.reward-row { display: grid; grid-template-columns: 1fr auto; gap: 8px 16px; align-items: center; padding: 14px 16px; border-bottom: 1px solid var(--line-2); }
+.reward-row:last-child { border-bottom: 0; }
+.reward-who { font-size: 15px; font-weight: 700; line-height: 1.4; color: var(--ink); }
+/* align-self: start để chip giữ đúng bề rộng chữ khi dòng đổ thành hai hàng trên điện
+   thoại — grid mặc định stretch, chip sẽ giãn hết bề ngang và trông như một cái nút bấm. */
+.reward-gift { align-self: start; padding: 6px 12px; border-radius: 999px; font-size: 13.5px; font-weight: 700; line-height: 1.3; white-space: nowrap; }
+.reward-gift-vip { background: var(--tag-bg); color: var(--tag-ink); border: 1px solid var(--tag-line); }
+.reward-gift-std { background: var(--gift-neutral); color: var(--ink-2); border: 1px solid var(--line); }
+
+/* Một chip một cột trên điện thoại: xếp ngang thì hai chip lệch nhau ở chỗ ngắt dòng và
+   nhìn như bố cục vỡ. Từ 560px trở lên mới cho chúng trôi cạnh nhau. */
+/* margin 0: khoảng cách giữa ba tầng do gap 20px của .section lo, thêm margin ở đây là
+   cộng dồn thành 34px và khối thưởng rời ra thành ba mảng không liên quan. */
+.reward-how { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.reward-chip { display: flex; flex-direction: column; gap: 1px; padding: 10px 14px; border-radius: 12px; background: var(--surface); border: 1px solid var(--line); }
+.reward-chip-t { font-size: 13.5px; font-weight: 700; color: var(--ink); }
+.reward-chip-b { font-size: 13.5px; line-height: 1.4; color: var(--muted); }
+
+.reward-terms { font-size: 13px; line-height: 1.7; color: var(--muted); }
+.reward-terms strong { margin-right: 8px; font-weight: 700; color: var(--ink-2); }
+
+@media (min-width: 560px) {
+  .reward-how { flex-direction: row; flex-wrap: wrap; }
+  .reward-chip { flex-direction: row; align-items: baseline; gap: 7px; border-radius: 999px; }
+}
 @media (min-width: 720px) {
-  .reward-list { gap: 12px; }
-  .reward { gap: 6px; padding: 16px 18px; border-radius: 14px; }
-  .reward-title { font-size: 15px; }
-  .reward-body { gap: 8px; font-size: 14px; }
+  .reward-row { padding: 16px 20px; }
+  .reward-gift { font-size: 14px; padding: 7px 13px; }
 }
 
 /* Footer */

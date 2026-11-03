@@ -2,6 +2,7 @@ import { BOOST } from '../config/constants.js';
 import { TOTAL_SLOTS } from '../../shared/catalog.js';
 import { User, nextJoinIndex } from '../models/index.js';
 import { randomRefCode } from '../utils/codes.js';
+import { maskEmail } from '../utils/mask.js';
 
 export const findByEmail = (email) => User.findOne({ email });
 
@@ -9,9 +10,41 @@ export const findByRefCode = (code) => User.findOne({ refCode: String(code || ''
 
 export const countUsers = () => User.countDocuments({});
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+// Số người đăng ký trong 24h qua. Chạy trên index { createdAt: -1 }.
+export const countRecent = (since = new Date(Date.now() - DAY_MS)) =>
+  User.countDocuments({ createdAt: { $gte: since } });
+
+// Bao nhiêu người gần nhất đẩy ra dải chạy ngang. 12 là đủ để dải không lặp lộ liễu trên
+// màn rộng, mà vẫn không biến API công khai thành bản trích danh sách người dùng.
+const RECENT_JOINS = 12;
+
+// Người đăng ký gần nhất, email đã che. Sắp theo createdAt nên chạy trên index
+// { createdAt: -1 } đã có sẵn cho last24h — không cần thêm index.
+export async function listRecentJoins(limit = RECENT_JOINS) {
+  const users = await User.find({}).sort({ createdAt: -1 }).limit(limit).select('email createdAt').lean();
+  // .select() chỉ lấy đúng hai trường: tránh lỡ tay trả nguyên document ra ngoài sau này.
+  return users.map((u) => ({ masked: maskEmail(u.email), at: u.createdAt }));
+}
+
 export async function getStats() {
-  const registered = await countUsers();
-  return { registered, totalSlots: TOTAL_SLOTS, remaining: Math.max(0, TOTAL_SLOTS - registered) };
+  // last24h cho trang biết TỐC ĐỘ lấp suất, không chỉ số suất còn lại: "còn 989" là tĩnh,
+  // "37 người đăng ký hôm qua" mới nói lên bao giờ hết.
+  // recent đi ké luôn request này: trang đã gọi /api/stats mỗi 30 giây rồi, thêm một
+  // endpoint riêng cho ticker là nhân đôi số request mà không được gì.
+  const [registered, last24h, recent] = await Promise.all([
+    countUsers(),
+    countRecent(),
+    listRecentJoins()
+  ]);
+  return {
+    registered,
+    totalSlots: TOTAL_SLOTS,
+    remaining: Math.max(0, TOTAL_SLOTS - registered),
+    last24h,
+    recent
+  };
 }
 
 // Hạng = số người đứng trên + 1. Đứng trên nghĩa là score nhỏ hơn, hoặc bằng score

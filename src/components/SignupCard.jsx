@@ -9,7 +9,7 @@ function readRef() {
   try { return new URLSearchParams(window.location.search).get('ref') || null; } catch { return null; }
 }
 
-export default function SignupCard({ me, onJoined, onReset, onOpenReserve }) {
+export default function SignupCard({ me, onJoined, onReset, onOpenReserve, pendingBasket = [] }) {
   const [ref] = useState(readRef);
   // Vào bằng link mời thì luôn mở form đăng ký, kể cả khi trình duyệt còn profile cũ —
   // link mời là để người mới đăng ký, không phải để xem lại kết quả của người đang ngồi máy.
@@ -58,7 +58,9 @@ export default function SignupCard({ me, onJoined, onReset, onOpenReserve }) {
       const found = await api.check(email.trim());
       if (found.exists) {
         setReturning(true);
-        onJoined(found.profile);
+        // await: onJoined còn ghi nhận giỏ cổ phiếu đã chọn trước khi đăng ký. Không chờ thì
+        // màn kết quả hiện ra trước khi lưu xong, và nút "Nhận" bên modal vẫn thấy giỏ rỗng.
+        await onJoined(found.profile);
         setStep('result');
         return;
       }
@@ -86,13 +88,13 @@ export default function SignupCard({ me, onJoined, onReset, onOpenReserve }) {
     try {
       const profile = await api.verify(email.trim(), otp);
       setReturning(false);
-      onJoined(profile);
+      await onJoined(profile);
       setStep('result');
     } catch (err) {
       // Email vừa được đăng ký ở nơi khác giữa lúc nhập OTP: server trả 409 kèm kết quả hiện tại
       if (err.data?.alreadyRegistered && err.data.profile) {
         setReturning(true);
-        onJoined(err.data.profile);
+        await onJoined(err.data.profile);
         setStep('result');
         return;
       }
@@ -113,6 +115,14 @@ export default function SignupCard({ me, onJoined, onReset, onOpenReserve }) {
     <div className="card signup">
       {step === 'email' && (
         <form className="stack-12" onSubmit={submitEmail} noValidate>
+          {/* Nhắc lại đúng những mã vừa chọn trong modal. Người dùng đi từ màn chọn sang đây
+              mà không thấy lựa chọn của mình đâu thì bước đăng ký biến thành một yêu cầu
+              trống rỗng; nhìn thấy VCB · GAS · FPT thì nó là việc cần làm nốt. */}
+          {pendingBasket.length > 0 && (
+            <p className="basket-note">
+              Đăng ký để giữ <strong className="ink">{pendingBasket.join(' · ')}</strong>
+            </p>
+          )}
           <label htmlFor="wl-email" className="label-lg">Email của bạn</label>
           <div className="row-wrap">
             <input
@@ -128,7 +138,7 @@ export default function SignupCard({ me, onJoined, onReset, onOpenReserve }) {
               {busy ? 'Đang gửi…' : 'Tham gia waitlist'}
             </button>
           </div>
-          <button type="button" className="btn btn-outline" onClick={onOpenReserve}>Reserve</button>
+          <button type="button" className="btn btn-outline" onClick={onOpenReserve}>Xem cổ phiếu được tặng</button>
           {error && <p role="alert" className="error">{error}</p>}
           <p className="muted-sm">
             Chúng tôi sẽ gửi mã xác thực 6 số tới email này.
@@ -289,7 +299,7 @@ function Result({ me, returning, onReset, onOpenReserve }) {
         </div>
       </div>
 
-      <button type="button" className="btn btn-outline" onClick={onOpenReserve}>Reserve</button>
+      <button type="button" className="btn btn-outline" onClick={onOpenReserve}>Chọn cổ phiếu được tặng</button>
     </div>
   );
 }

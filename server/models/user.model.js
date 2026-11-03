@@ -66,5 +66,7 @@ const userSchema = new Schema(
 // Trùng với index đã tồn tại trong DB: email_1, refCode_1, score_1_joinIndex_1.
 // Hai index unique khai báo qua `unique: true` ở trên; đây là index phục vụ xếp hạng.
 userSchema.index({ score: 1, joinIndex: 1 });
+// Phục vụ đếm "đăng ký trong 24h qua" ở /api/stats, gọi lại mỗi 30 giây từ mọi tab đang mở.
+userSchema.index({ createdAt: -1 });
 
 export const User = model('User', userSchema);
