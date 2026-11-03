@@ -3,6 +3,7 @@ import { api } from './lib/api.js';
 import { TOTAL_SLOTS } from './lib/data.js';
 import { fmt } from './lib/format.js';
 import Logo from './components/Logo.jsx';
+import msbMark from './assets/msb-mark.png';
 import SignupCard from './components/SignupCard.jsx';
 import FeaturedStocks from './components/FeaturedStocks.jsx';
 import TierList from './components/TierList.jsx';
@@ -76,18 +77,21 @@ export default function App() {
         <section className="hero-main">
           <div className="hero-copy">
             {/* <span className="hero-brand">NEXXA</span> */}
-            <span className="eyebrow">Đối tác Ngân hàng MSB & Chứng khoán MSB</span>
+            <span className="eyebrow eyebrow-partner">
+              Đối tác Ngân hàng MSB
+              <img className="partner-mark" src={msbMark} width={90} height={54} alt="" />
+            </span>
             <h1>
               {/* Xây Dựng Tài Sản Cùng NEXXA */}
-              <span className="h1-accent">Cổ Phiếu Miễn Phí</span>
+              <span className="h1-accent">Tặng Cổ Phiếu</span>
             </h1>
             <p className="lead">
-              <strong className="lead-kicker">1.000 NGƯỜI ĐẦU TIÊN + TOP 1.000</strong>
-              Nhận Cổ Phiếu VIP
+              <strong className="lead-kicker">TOP 1.000</strong>
+              <p className="lead-content">Nhận Cổ Phiếu VIP</p>
             </p>
+          <FeaturedStocks />
           </div>
           <SignupCard me={me} onJoined={handleJoined} onReset={handleReset} onOpenReserve={() => setReserveOpen(true)} />
-          <FeaturedStocks />
         </section>
       </main>
 

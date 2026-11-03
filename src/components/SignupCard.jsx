@@ -283,7 +283,8 @@ function Result({ me, returning, onReset, onOpenReserve }) {
           )}
         </div> */}
         <div className="invite-foot">
-          <span>Đã mời {fmt(me.invites)} bạn · +{fmt(me.invites * 10)} bậc</span>
+          {/* · +{fmt(me.invites * 10)} bậc */}
+          <span className='invite-title'>Đã mời {fmt(me.invites)} bạn </span>
           <button type="button" className="link-btn small" onClick={onReset}>Dùng email khác</button>
         </div>
       </div>

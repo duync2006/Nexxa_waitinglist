@@ -140,7 +140,7 @@ export default function DcaCalculator() {
         <div className="sliders">
           {/* onChange nhận thẳng v, KHÔNG dùng `v || 50000`: min đã là 0 nên phép `||` sẽ
               biến 0 thành 50.000 và thanh trượt không bao giờ kéo về đầu được. */}
-          <Slider id="calc-c" label="Monthly Investment" valueText={vnd(C)} min={0} max={2000000} step={10000} value={C} onChange={setC} minText="0đ" maxText="2M VNĐ" />
+          <Slider id="calc-c" label="Monthly Investment" valueText={vnd(C)} min={0} max={1000000} step={10000} value={C} onChange={setC} minText="0đ" maxText="2M VNĐ" />
           <Slider id="calc-r" label="Growth Rate" valueText={`${R}%`} min={0} max={20} step={1} value={R} onChange={(v) => setR(v || 0)} minText="0%" maxText="20%" />
           <Slider id="calc-n" label="Investment Period" valueText={`${fmt(N)} years`} min={1} max={40} step={1} value={N} onChange={(v) => setN(v || 1)} minText="1 year" maxText="40 years" />
         </div>

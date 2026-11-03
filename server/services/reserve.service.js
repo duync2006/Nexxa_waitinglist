@@ -19,7 +19,11 @@ const normalize = (raw) =>
 // giá và bị 503 oan. Vì vậy phải hợp hai bảng.
 async function priceTableFor(user) {
   const table = await getPriceTable();
+  console.log('[reserve] bảng giá snapshot', Object.keys(table).length, 'mã');
+  console.log('table: ', table);
   for (const r of user?.reservation?.lockedPrices ?? []) table[r.ticker] = r.price;
+  console.log("user.reservation: ", user?.reservation);
+  console.log('[reserve] bảng giá hợp với lockedPrices', Object.keys(table).length, 'mã');
   return table;
 }
 

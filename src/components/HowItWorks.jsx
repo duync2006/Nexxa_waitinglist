@@ -4,7 +4,7 @@ const REWARDS = [
   { title: 'Danh Sách Chờ TIÊU CHUẨN', body: 'Thưởng cổ phiếu tiêu chuẩn' },
   { title: 'Giới Thiệu', body: 'Giới thiệu nhiều, lên TOP nhanh' },
   { title: 'Quỹ Thưởng Tăng Dần', body: 'Càng đông, thưởng càng lớn' },
-  { title: 'Chuỗi Hàng Tháng', body: 'Mua 1+ cổ phiếu, tặng 1 cổ phiếu' },
+  { title: 'Chuỗi Hàng Tháng', body: 'Mua cổ phiếu, tặng cổ phiếu thưởng' },
   { title: 'Hạn Chế Cổ Phiếu Thưởng', body: 'Nắm giữ cổ phiếu thưởng 1 năm' },
   { title: 'Xác Minh', body: 'Hoàn tất đăng ký và eKYC' },
   { title: 'Thời Điểm Thưởng', body: 'Thưởng bắt đầu sau khi ra mắt' },

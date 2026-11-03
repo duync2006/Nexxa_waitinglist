@@ -1,5 +1,9 @@
 :root {
-  --accent: #2140E8;
+  /* Xanh lá đậm. 7.13 so với nền trắng — gần đúng mức 7.09 của màu xanh dương cũ, nên mọi
+     chỗ đang dùng accent làm chữ hay làm nền nút đều giữ nguyên độ đọc được. */
+  --accent: #00D100;
+  --accent-on: #FFFFFF;
+  --accent-rgb: 22, 101, 52;
   --ink: #0E1525;
   --ink-2: #374151;
   --muted: #4B5563;
@@ -8,6 +12,7 @@
   --surface: #FFFFFF;
   --line: #E3E6EB;
   --line-2: #E8EBEF;
+  --line-3: #EBEBEB;
   --input-line: #D5D9E0;
   --error: #B91C1C;
   --good: #15803D;
@@ -26,12 +31,25 @@
   --tag-line: #E3B33D;
   --tag-fill: #E3B33D;
   --tag-on: #3D2A00;
+  --gray-letter: #1E2124;
+  --second-title: #767676;
+  --third-title: #8C8C91;
+  --green-title: #00C706;
+  /* Giãn cách chữ toàn trang. Tăng/giảm một chỗ này là đổi cả site. */
+  --tracking: 0.02em;
+  /* Dùng cho cả gap giữa thẻ và padding đóng nhóm của marquee cổ phiếu. */
+  --featured-gap: 8px;
 }
 
 /* Chế độ tối: nền tối, chữ màu lime green */
 :root[data-theme='dark'] {
   color-scheme: dark;
-  --accent: #5C74F2;
+  /* Dark mode cần xanh sáng hơn để tách khỏi nền, nhưng vẫn là xanh lá thật chứ không ngả
+     vàng như --ink (#BEF264) của theme. Chữ tối trên nó đạt 8.54, trong khi chữ trắng trên
+     accent xanh dương cũ chỉ được 4.01 — đổi luôn --accent-on để hết chỗ đó. */
+  --accent: #22C55E;
+  --accent-on: #0A0E08;
+  --accent-rgb: 34, 197, 94;
   --ink: #BEF264;
   --ink-2: #D9F99D;
   --muted: #A3E635;
@@ -67,9 +85,15 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--ink);
-  font-family: 'Be Vietnam Pro', system-ui, sans-serif;
+  /* font-family: 'Be Vietnam Pro', system-ui, sans-serif; */
+  /* font-family: 'Archivo', sans-serif; */
+  /* font-family: "Menlo", "Monaco", "Consolas", "Courier New", monospace; */
+  /* font-family: "Roboto", sans-serif; */
+  font-family: "Montserrat", sans-serif;
+  /* font-family: "JetBrains Mono", "Roboto Mono", "Courier New", monospace; */
   font-size: 16px;
   line-height: 1.5;
+  letter-spacing: var(--tracking);
   -webkit-font-smoothing: antialiased;
 }
 
@@ -102,7 +126,11 @@ button:disabled { opacity: 0.6; cursor: not-allowed; }
 .muted-13 { font-size: 13px; color: var(--muted); }
 .muted-sm { font-size: 14px; color: var(--muted-2); }
 .eyebrow { align-self: flex-start; font-size: 13px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink); }
-.h2 { font-size: 24px; font-weight: 700; letter-spacing: -0.01em; }
+/* Dòng đối tác có dấu M của MSB đứng trước chữ. alt="" vì chữ ngay bên cạnh đã nói "MSB" —
+   để alt có nội dung thì trình đọc màn hình sẽ đọc tên ngân hàng hai lần. */
+.eyebrow-partner { display: inline-flex; align-items: center; gap: 8px; }
+.partner-mark { display: block; height: 18px; width: auto; flex-shrink: 0; }
+.h2 { font-size: 24px; font-weight: 700; }
 .h2-sm { font-size: 18px; font-weight: 700; }
 .h2-card { font-size: 22px; font-weight: 700; letter-spacing: -0.01em; }
 .label { font-size: 14px; font-weight: 600; }
@@ -140,7 +168,7 @@ button:disabled { opacity: 0.6; cursor: not-allowed; }
 .pool-bar-thumb:active { background: var(--muted); cursor: grabbing; }
 .chip { position: relative; display: inline-flex; align-items: center; gap: 6px; max-width: 100%; min-height: 36px; padding: 6px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); color: var(--ink); font-size: 14px; cursor: grab; user-select: none; -webkit-user-drag: element; }
 .chip:active { cursor: grabbing; }
-.chip[aria-pressed='true'] { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(92,116,242,0.25); }
+.chip[aria-pressed='true'] { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(var(--accent-rgb), 0.25); }
 .chip-t { font-weight: 800; letter-spacing: 0.02em; }
 .chip-n { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 140px; }
 /* Giá là huy hiệu vàng nằm giữa cạnh phải chip, cùng kiểu viền-nền với .chip-tag của VIP.
@@ -192,7 +220,7 @@ button:disabled { opacity: 0.6; cursor: not-allowed; }
 .hero { padding-top: clamp(24px, 5vw, 72px); padding-bottom: 48px; display: flex; flex-wrap: wrap; gap: clamp(32px, 5vw, 64px); align-items: flex-start; }
 .hero-main { flex: 1 1 100%; min-width: 0; display: flex; flex-direction: column; gap: 10px; }
 .hero-copy { display: flex; flex-direction: column; align-items: center; gap: 16px; text-align: center; }
-.hero h1 { font-size: clamp(36px, 5vw, 60px); line-height: 1.08; font-weight: 800; letter-spacing: -0.03em; }
+.hero h1 { font-size: clamp(36px, 5vw, 60px); line-height: 1.08; font-weight: 800;  }
 .lead { font-size: clamp(16px, 1.6vw, 19px); color: var(--muted); max-width: 520px; margin-inline: auto; }
 /* Dòng thứ hai của h1, tách hẳn xuống dòng và lấy màu nhấn để "Cổ Phiếu Miễn Phí" nổi lên. */
 /* text-indent bù lại khoảng cách chữ thừa ở cuối, nếu không chữ sẽ lệch trái khi căn giữa. */
@@ -201,18 +229,18 @@ button:disabled { opacity: 0.6; cursor: not-allowed; }
 .hero-copy .eyebrow { align-self: center; }
 /* Chia đều độ dài các dòng khi chữ xuống hàng, tránh một từ rớt lẻ loi ở dòng cuối khi căn giữa. */
 .hero-copy .eyebrow, .hero h1, .hero .lead { text-wrap: balance; }
-.hero h1 .h1-accent { display: block; color: var(--ink); }
-.lead-kicker { display: block; color: var(--ink); font-weight: 800; letter-spacing: 0.01em; }
-
+.hero h1 .h1-accent { display: block; color: var(--ink); font-weight:600; color: var(--gray-letter); }
+.lead-kicker { display: block; color: var(--second-title); font-weight: 600; letter-spacing: 0.02em; }
+.lead-content { display: block; color: var(--third-title); font-weight: 400; }
 /* Card */
 .card { background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: clamp(20px, 3vw, 32px); box-shadow: 0 1px 2px rgba(14,21,37,0.04), 0 12px 32px rgba(14,21,37,0.06); max-width: 560px; }
 
 .input { flex: 1 1 220px; min-width: 0; height: 52px; padding: 0 16px; border: 1.5px solid var(--input-line); border-radius: 12px; font: inherit; font-size: 16px; color: var(--ink); background: var(--surface); }
-.input:focus { border-color: var(--accent); outline: none; box-shadow: 0 0 0 3px rgba(33,64,232,0.15); }
+.input:focus { border-color: var(--accent); outline: none; box-shadow: 0 0 0 3px rgba(var(--accent-rgb), 0.15); }
 .input-otp { flex: none; width: 100%; height: 64px; font-size: 30px; font-weight: 600; letter-spacing: 0.5em; text-align: center; font-variant-numeric: tabular-nums; }
 
 .btn { height: 52px; padding: 0 24px; border: 0; border-radius: 12px; font-size: 16px; font-weight: 600; cursor: pointer; }
-.btn-primary { background: var(--accent); color: #FFFFFF; }
+.btn-primary { background: var(--accent); color: var(--accent-on); }
 .btn-primary:hover:not(:disabled) { filter: brightness(1.08); }
 .btn-grow { flex: 1 0 auto; }
 .btn-outline { width: 100%; background: transparent; border: 1px solid var(--accent); color: var(--accent); }
@@ -233,7 +261,7 @@ button:disabled { opacity: 0.6; cursor: not-allowed; }
 /* Result */
 .success-line { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 600; color: var(--good); word-break: break-all; }
 .rank-row { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
-.rank-big { font-size: clamp(56px, 8vw, 80px); line-height: 1; font-weight: 800; letter-spacing: -0.04em; font-variant-numeric: tabular-nums; }
+.rank-big { font-size: clamp(56px, 8vw, 80px); line-height: 1; font-weight: 800; font-variant-numeric: tabular-nums; }
 .tier-pill { padding: 8px 14px; border-radius: 999px; font-size: 14px; font-weight: 700; letter-spacing: 0.06em; }
 /* Ô quà luôn dùng chữ tối trên nền pastel, nên không đổi theo chế độ */
 .gift-box { display: flex; flex-direction: column; gap: 4px; padding: 16px; border-radius: 14px; color: #0E1525; }
@@ -250,22 +278,37 @@ button:disabled { opacity: 0.6; cursor: not-allowed; }
 
 /* Tiers */
 .card.signup { max-width: none; width: 100%; margin-bottom: 10px; }
-.featured { min-width: 0; display: flex; flex-direction: column; gap: 0px; }
+/* width:100% la bat buoc: .hero-copy la flex column co align-items:center, nen con khong
+   gian theo container ma co theo noi dung cua chinh no — o day la ca track 3888px, lam
+   overflow:hidden ben duoi mat tac dung va dai the tran ra ngoai mep man hinh. */
+.featured { min-width: 0; width: 100%; display: flex; flex-direction: column; gap: 0px; }
 .featured-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex-wrap: wrap; }
 .featured-title { font-size: 16px; font-weight: 700; }
-.featured-scroll { overflow: hidden; padding: 4px 0 0px; }
-.featured-track { display: flex; width: max-content; animation: featured-marquee 15s linear infinite; }
-.featured-scroll:hover .featured-track, .featured-scroll:focus-within .featured-track { animation-play-state: paused; }
-.featured-group { display: flex; gap: 12px; padding-right: 10px; }
-@keyframes featured-marquee { from { transform: translateX(0); } to { transform: translateX(-50%); } }
-@media (prefers-reduced-motion: reduce) {
-  .featured-scroll { overflow-x: auto; }
-  .featured-track { animation: none; }
+/* Cuộn ngang thật, không phải animation: FeaturedStocks.jsx tự đẩy scrollLeft mỗi khung
+   hình. Nhờ vậy ngón tay vuốt được, và trình duyệt chỉ vẽ phần đang nhìn thấy thay vì giữ
+   một lớp composite rộng gần 4000px.
+   KHÔNG được bỏ rule này: thiếu overflow ở đây là dải thẻ không bị cắt, tràn ra ngoài và
+   đè lên nội dung bên dưới.
+   scroll-behavior: auto cũng bắt buộc — html đang đặt 'smooth', nếu nó áp vào đây thì mỗi
+   lần JS gán scrollLeft trình duyệt lại chạy hoạt ảnh cuộn riêng, chống nhau với vòng lặp. */
+.featured-scroll {
+  overflow-x: auto;
+  overflow-y: hidden;
+  /* 12px chu khong phai 4px: .chip-tag cua VIP nho len 10px phia tren canh the, ma
+     overflow-y o day se cat dung phan do. */
+  padding: 12px 0 0px;
+  scroll-behavior: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
 }
-.featured-item { flex: 0 0 150px; display: flex; flex-direction: column; gap: 4px; padding: 14px; border-radius: 14px; background: var(--surface); border: 1px solid var(--line); }
+.featured-scroll::-webkit-scrollbar { display: none; }
+.featured-track { display: flex; width: max-content; }
+/* padding-right PHẢI bằng gap: điểm nối giữa hai nhóm lấy khoảng cách từ padding này, lệch
+   một chút là cứ mỗi vòng lại thấy một cặp thẻ sát vào nhau. */
+.featured-group { display: flex; gap: var(--featured-gap); padding-right: var(--featured-gap); }
+.featured-item { position: relative; flex: 0 0 130px; display: flex; flex-direction: column; gap: 4px; padding: 14px; border-radius: 14px; background: var(--surface); border: 1px solid var(--line); }
 .featured-t { font-size: 18px; font-weight: 800; letter-spacing: 0.02em; color: var(--accent); }
 .featured-n { font-size: 14px; font-weight: 600; }
-.featured-s { font-size: 12px; color: var(--muted); }
 .tiers-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
 .tier-card { display: flex; flex-direction: column; gap: 12px; padding: 18px; border-radius: 16px; background: var(--surface); border: 1.5px solid var(--line); }
 .tier-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
@@ -369,11 +412,11 @@ button:disabled { opacity: 0.6; cursor: not-allowed; }
    Dấu ngoặc và dấu chấm đầu dòng đặt bằng CSS ::before/::after để trình đọc màn hình
    không phải đọc ra "ngoặc vuông", chỉ đọc đúng nội dung. */
 .reward-list { list-style: none; margin: 0; padding: 5px; display: grid; grid-template-columns: 1fr; gap: 8px; }
-.reward { display: flex; flex-direction: column; gap: 1px; padding: 7px 12px; border-radius: 10px; background: var(--surface); border: 1px solid var(--line); }
-.reward-title { font-size: 15px; font-weight: 700; line-height: 1.55; color: var(--ink); }
+.reward { display: flex; flex-direction: column; gap: 1px; padding: 7px 12px; border-radius: 10px; background: var(--reward); border: 1px solid var(--line-3); }
+.reward-title { font-size: clamp(16px, 1.6vw, 19px);; font-weight: 700; line-height: 1.55; color: var(--second-title); }
 .reward-title::before { content: '[ '; }
 .reward-title::after { content: ' ]'; }
-.reward-body { display: flex; gap: 6px; font-size: 15px; line-height: 1.4; color: var(--muted); }
+.reward-body { display: flex; gap: 6px; font-size: 15px; line-height: 1.4; color: var(--second-title); }
 .reward-body::before { content: '•'; flex-shrink: 0; color: var(--accent); }
 @media (min-width: 720px) {
   .reward-list { gap: 12px; }
