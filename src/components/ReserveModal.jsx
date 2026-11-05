@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '../lib/api.js';
-import { POOLS, POOL_STOCKS, RESERVABLE } from '../lib/data.js';
+import { useCatalog } from '../lib/catalog.jsx';
 import { vnd } from '../lib/format.js';
 
 // Thanh cuộn do mình tự vẽ. Thanh native trên mobile luôn là overlay và tự mờ đi khi ngừng cuộn —
@@ -74,6 +74,9 @@ function ScrollBox({ label, children }) {
 }
 
 export default function ReserveModal({ open, onClose, me, onGoSignup, initialBasket = [] }) {
+  // Danh mục từ /api/catalog; quyền chọn và giá đã chốt vẫn từ /api/reserve/options vì
+  // chúng phụ thuộc từng người — catalog không biết ai đang mở màn hình này.
+  const { pools: allPools, poolStocks, poolOfTicker } = useCatalog();
   const [basket, setBasket] = useState([]);
   const [over, setOver] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -110,9 +113,9 @@ export default function ReserveModal({ open, onClose, me, onGoSignup, initialBas
 
   if (!open) return null;
 
-  const stockByTicker = Object.fromEntries(Object.values(RESERVABLE).flat().map((s) => [s.t, s]));
-  // Để gắn tag phân loại lên chip trong ô đã chọn; hai pool không có mã nào trùng nhau.
-  const poolByTicker = Object.fromEntries(POOLS.flatMap((p) => RESERVABLE[p.key].map((s) => [s.t, p.key])));
+  // poolOfTicker đến thẳng từ catalog, không dựng lại map ở đây nữa — trước đây mỗi
+  // component tự tính lại quan hệ mã → nhóm, bốn chỗ cùng một luật.
+  const isReservable = (t) => Boolean(poolOfTicker[t]);
 
   const prices = opts?.prices ?? {};
   const budget = opts?.budget ?? 0;
@@ -128,7 +131,7 @@ export default function ReserveModal({ open, onClose, me, onGoSignup, initialBas
       : `Giá ${vnd(priceOf(t))} vượt phần ngân sách còn lại (${vnd(Math.max(0, left))})`;
 
   // Hạng ngoài top 1.000 chỉ được nhóm Standard: ẩn hẳn nhóm VIP thay vì cho chọn rồi báo lỗi.
-  const visiblePools = opts ? POOLS.filter((p) => opts.pools.includes(p.key)) : POOLS;
+  const visiblePools = opts ? allPools.filter((p) => opts.pools.includes(p.key)) : allPools;
 
   const add = (t) => { setDone(false); setBasket((b) => (b.includes(t) ? b : [...b, t])); };
   const remove = (t) => { setDone(false); setBasket((b) => b.filter((x) => x !== t)); };
@@ -203,7 +206,7 @@ export default function ReserveModal({ open, onClose, me, onGoSignup, initialBas
             e.preventDefault();
             setOver(false);
             const t = e.dataTransfer.getData('text/plain');
-            if (stockByTicker[t] && canPick(t)) add(t);
+            if (isReservable(t) && canPick(t)) add(t);
           }}
         >
           {basket.length === 0 ? (
@@ -211,7 +214,7 @@ export default function ReserveModal({ open, onClose, me, onGoSignup, initialBas
           ) : (
             basket.map((t) => (
               <span key={t} className="chip picked">
-                {poolByTicker[t] === 'vip' && <span className="chip-tag">VIP</span>}
+                {poolOfTicker[t] === 'vip' && <span className="chip-tag">VIP</span>}
                 <span className="chip-t">{t}</span>
                 <button type="button" className="chip-x" onClick={() => remove(t)} aria-label={`Bỏ ${t}`}>×</button>
               </span>
@@ -222,7 +225,7 @@ export default function ReserveModal({ open, onClose, me, onGoSignup, initialBas
         <div className="reserve-pools">
           {visiblePools.map((pool) => {
             // Mã phổ biến xếp trước, phần còn lại nối sau; cả danh sách nằm trong một vùng cuộn.
-            const { popular, rest } = POOL_STOCKS[pool.key];
+            const { popular = [], rest = [] } = poolStocks[pool.key] ?? {};
             const stocks = [...popular, ...rest];
             return (
               <section key={pool.key} className="pool" aria-labelledby={`pool-${pool.key}`}>

@@ -1,20 +1,20 @@
 import { useState } from 'react';
-import { POOLS, RESERVABLE, TIER_VIEWS, TOTAL_SLOTS, tierOfRank } from '../lib/data.js';
+import { useCatalog } from '../lib/catalog.jsx';
 import { fmt, vnd } from '../lib/format.js';
 
 // Component này đang bị tắt ở App.jsx. Giữ lại và cập nhật theo hai bậc quyền lợi mới
 // để lần bật lại không vỡ build — bảng TIERS cũ (GOLD/SILVER/COPPER) đã bị bỏ.
 
-// Gom tất cả mã của các pool mà bậc này được chọn.
-const stocksOf = (tier) => tier.pools.flatMap((key) => RESERVABLE[key]);
-
-const poolLabels = (tier) =>
-  tier.pools.map((key) => POOLS.find((p) => p.key === key).label).join(' + ');
-
 function TierCard({ t, registered, isMine }) {
+  // Danh mục từ server, không còn gom từ RESERVABLE trong bundle.
+  const { totalSlots: TOTAL_SLOTS, pools, stocksOfPools } = useCatalog();
   const [open, setOpen] = useState(false);
   const panelId = `tier-panel-${t.key}`;
-  const stocks = stocksOf(t);
+  const stocks = stocksOfPools(t.pools);
+  const poolLabels = t.pools
+    .map((key) => pools.find((p) => p.key === key)?.label)
+    .filter(Boolean)
+    .join(' + ');
 
   // Bậc 'top' có đúng 1.000 suất và đếm được bao nhiêu đã lấp đầy.
   // Bậc 'rest' không giới hạn số lượng nên không có thanh tiến độ.
@@ -61,7 +61,7 @@ function TierCard({ t, registered, isMine }) {
         aria-controls={panelId}
         onClick={() => setOpen((o) => !o)}
       >
-        <span>{open ? 'Ẩn' : 'Xem'} {stocks.length} mã {poolLabels(t)}</span>
+        <span>{open ? 'Ẩn' : 'Xem'} {stocks.length} mã {poolLabels}</span>
         <span className="chevron" aria-hidden="true" />
       </button>
 
@@ -83,6 +83,7 @@ function TierCard({ t, registered, isMine }) {
 }
 
 export default function TierList({ registered, myRank }) {
+  const { totalSlots: TOTAL_SLOTS, tierViews, tierOfRank } = useCatalog();
   const mine = myRank ? tierOfRank(myRank) : null;
 
   return (
@@ -98,7 +99,7 @@ export default function TierList({ registered, myRank }) {
       </div>
 
       <div className="tiers-grid">
-        {TIER_VIEWS.map((t) => (
+        {tierViews.map((t) => (
           <TierCard key={t.key} t={t} registered={registered} isMine={mine?.key === t.key} />
         ))}
       </div>

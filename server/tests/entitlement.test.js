@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import request from 'supertest';
 import { createApp } from '../app.js';
 import { Price, User } from '../models/index.js';
-import { RESERVABLE, TOTAL_SLOTS } from '../../shared/catalog.js';
+import { RESERVABLE, TOTAL_SLOTS, groupTypeOfTicker } from '../../shared/catalog.js';
 import { checkBudgetFeasibility, getPriceTable, refreshPrices } from '../services/price.service.js';
 import { resetDb, seedPrices, setupDb, teardownDb } from './helpers/db.js';
 
@@ -213,6 +213,24 @@ describe('Bảng giá', () => {
     await assert.rejects(refreshPrices(), /Chưa cấu hình nguồn giá|chưa được hiện thực hoá/);
 
     assert.deepEqual(await getPriceTable(), before, 'snapshot bị thay đổi khi nguồn chết');
+  });
+
+  it('mọi mã đều phân được về đúng một nhóm VIP hoặc STANDARD', () => {
+    const all = Object.values(RESERVABLE).flat().map((s) => s.t);
+    const groups = all.map(groupTypeOfTicker);
+
+    assert.deepEqual([...new Set(groups)].sort(), ['STANDARD', 'VIP']);
+    assert.equal(groups.filter((g) => g === 'VIP').length, RESERVABLE.vip.length);
+    assert.equal(groups.filter((g) => g === 'STANDARD').length, RESERVABLE.standard.length);
+    // Mã lạ không được âm thầm rơi vào một nhóm nào đó
+    assert.equal(groupTypeOfTicker('KHONGCO'), null);
+  });
+
+  it('groupType ngoài hai giá trị cho phép thì bị model từ chối', async () => {
+    await assert.rejects(
+      Price.create({ _id: 'ZZZ', price: 1000, updatedAt: new Date(), groupType: 'PREMIUM' }),
+      /groupType/
+    );
   });
 
   it('phát hiện được bậc quyền lợi không mua nổi mã nào', async () => {

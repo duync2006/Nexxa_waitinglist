@@ -1,5 +1,5 @@
 import logoLight from '../assets/nexxa-logo.png';
-import logoDark from '../assets/nexxa-logo-dark.png';
+import logoDark from '../assets/nexxa-logo.png';
 
 // Ảnh đã cắt sát nội dung và bỏ nền trắng (nguồn: public/Nexxa-Logo.png). Khối chữ "nexxa"
 // nằm sẵn trong ảnh — đừng kèm thêm chữ Nexxa bên cạnh, sẽ thành đọc hai lần.

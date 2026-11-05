@@ -1,16 +1,6 @@
-import { useEffect, useState } from 'react';
-import { api } from '../lib/api.js';
-import { POOL_STOCKS } from '../lib/data.js';
-import { vnd } from '../lib/format.js';
+import { useCatalog } from '../lib/catalog.jsx';
 import { useMarquee } from '../lib/useMarquee.js';
-
-// Danh sách lấy thẳng từ hai pool Reserve, cùng nguồn với ReserveModal: mã phổ biến xếp
-// trước, phần còn lại nối sau. Trước đây đây là một mảng chép tay riêng, nên thêm/bớt mã
-// trong catalog xong carousel vẫn hiện danh sách cũ.
-const stocksOfPool = (key) => {
-  const { popular, rest } = POOL_STOCKS[key];
-  return [...popular, ...rest].map((s) => ({ ...s, pool: key }));
-};
+import { vnd } from '../lib/format.js';
 
 // Trộn hai nhóm theo đúng tỉ lệ số lượng thay vì xen kẽ 1-1. VIP có 30 mã còn Standard 20,
 // nên xen kẽ 1-1 sẽ hết Standard ở giữa đường và 10 mã VIP cuối dồn thành một cụm toàn tag.
@@ -27,57 +17,58 @@ const mixByRatio = (a, b) => {
   return out;
 };
 
-const FEATURED = mixByRatio(stocksOfPool('vip'), stocksOfPool('standard'));
-
-// Tốc độ trượt tính bằng px/giây. Chậm hơn bản cũ (130) vì mỗi thẻ giờ có thêm dòng giá —
-// nhiều chữ hơn để đọc thì phải cho mắt thêm thời gian trước khi thẻ trôi khỏi khung.
+// Tốc độ trượt tính bằng px/giây. KHÔNG hạ xuống dưới 60: mỗi khung hình khi đó nhích chưa
+// tới 1px, mà Safari trên iOS làm tròn scrollLeft về số nguyên nên chuyển động thành giật
+// từng nấc. Xem chú thích trong useMarquee.js.
 const SPEED = 105;
 
 export default function FeaturedStocks() {
   const { scrollRef, trackRef } = useMarquee(SPEED);
-  const [prices, setPrices] = useState({});
+  // Danh mục và giá cùng đến từ /api/catalog. Trước đây component này tự gọi
+  // /api/reserve/options chỉ để lấy giá, trùng với lần gọi của ReserveModal.
+  const { poolStocks } = useCatalog();
 
-  // Giá lấy từ bảng giá của server, cùng nguồn với ReserveModal — không chép tay vào đây,
-  // nếu không dải trượt sẽ quảng cáo một mức giá còn màn chọn quà lại tính mức khác.
-  // Gọi ở chế độ xem thử (không email) nên người chưa đăng ký vẫn thấy giá.
-  useEffect(() => {
-    let alive = true;
-    api.reserveOptions()
-      .then((o) => { if (alive) setPrices(o.prices ?? {}); })
-      .catch(() => { /* không có giá thì thẻ vẫn hiện mã và tên */ });
-    return () => { alive = false; };
-  }, []);
+  const featured = mixByRatio(
+    [...(poolStocks.vip?.popular ?? []), ...(poolStocks.vip?.rest ?? [])],
+    [...(poolStocks.standard?.popular ?? []), ...(poolStocks.standard?.rest ?? [])]
+  );
+
+  if (featured.length === 0) return null;
 
   return (
     <div className="featured">
-      <div className="featured-head">
-        {/* <span className="featured-title">Cổ phiếu nổi tiếng trên HOSE</span> */}
-        {/* <span className="muted-13">Vuốt ngang để xem →</span> */}
-      </div>
-      <div
-        className="featured-scroll"
-        ref={scrollRef}
-        role="region"
-        aria-label="Danh sách cổ phiếu nổi tiếng"
-        tabIndex={0}
-      >
-        <div className="featured-track" ref={trackRef}>
-          {/* Hai nhóm giống nhau để vòng lặp liền mạch; nhóm sau ẩn với trình đọc màn hình */}
-          {[false, true].map((hidden) => (
-            <div key={String(hidden)} className="featured-group" aria-hidden={hidden || undefined}>
-              {FEATURED.map((s) => (
-                // title vì .featured-n cắt tên dài bằng ellipsis để mọi thẻ cao bằng nhau
-                <div key={s.t} className="featured-item" title={s.n}>
-                  {s.pool === 'vip' && <span className="chip-tag">VIP</span>}
-                  <span className="featured-t">{s.t}</span>
-                  <span className="featured-n">{s.n}</span>
-                  <span className="featured-p">
-                    {typeof prices[s.t] === 'number' ? vnd(prices[s.t]) : '—'}
-                  </span>
-                </div>
-              ))}
-            </div>
-          ))}
+      <div className="featured-head" />
+      {/* Lớp bọc này chỉ để đeo mask mép mờ. Mask PHẢI nằm ngoài khung cuộn: trên iOS,
+          mask-image ép phần tử thành một composited layer riêng, mà khung cuộn chứa track
+          rộng 16.000px nên WebKit phải vẽ layer đó theo tile. JS đẩy scrollLeft mỗi khung
+          hình thì Safari không kịp vẽ tile phía trước và để lại một mảng trống chạy qua.
+          Đeo mask lên lớp bọc thì layer bị mask chỉ rộng bằng màn hình. */}
+      <div className="featured-mask">
+        <div
+          className="featured-scroll"
+          ref={scrollRef}
+          role="region"
+          aria-label="Danh sách cổ phiếu nổi tiếng"
+          tabIndex={0}
+        >
+          <div className="featured-track" ref={trackRef}>
+            {/* Hai nhóm giống nhau để vòng lặp liền mạch; nhóm sau ẩn với trình đọc màn hình */}
+            {[false, true].map((hidden) => (
+              <div key={String(hidden)} className="featured-group" aria-hidden={hidden || undefined}>
+                {featured.map((s) => (
+                  // title để xem tên đầy đủ khi tên dài quá 3 dòng của .featured-n
+                  <div key={s.t} className="featured-item" title={s.n ?? s.t}>
+                    {s.pool === 'vip' && <span className="chip-tag">VIP</span>}
+                    <span className="featured-t">{s.t}</span>
+                    <span className="featured-n">{s.n ?? ''}</span>
+                    <span className="featured-p">
+                      {typeof s.price === 'number' ? vnd(s.price) : '—'}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     </div>

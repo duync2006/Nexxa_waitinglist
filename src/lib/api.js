@@ -22,6 +22,8 @@ async function call(path, body = {}) {
 
 export const api = {
   stats: () => call('/api/stats'),
+  // Danh mục cổ phiếu, nhóm, số suất, bậc quà. Công khai, không phụ thuộc người dùng.
+  catalog: () => call('/api/catalog'),
   requestOtp: (email, ref) => call('/api/waitlist/request-otp', { email, ref }),
   check: (email) => call('/api/waitlist/check', { email }),
   verify: (email, otp) => call('/api/waitlist/verify', { email, otp }),

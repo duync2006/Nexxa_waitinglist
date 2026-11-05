@@ -1,7 +1,7 @@
 import { env } from '../../config/env.js';
 import { connectDb, disconnectDb } from '../../db/connect.js';
 import { User, Otp, Counter, Price } from '../../models/index.js';
-import { RESERVABLE } from '../../../shared/catalog.js';
+import { RESERVABLE, groupTypeOfTicker } from '../../../shared/catalog.js';
 
 // CHỐT CHẶN: test xoá sạch collection sau mỗi ca, nên tuyệt đối không được trỏ vào DB thật.
 // Chỉ chấp nhận database có tên kết thúc bằng _test.
@@ -36,7 +36,16 @@ export async function seedPrices(overrides = {}, { base = 20000, skip = [] } = {
     .flat()
     .map((s) => s.t)
     .filter((t) => !skipSet.has(t))
-    .map((t) => ({ _id: t, price: overrides[t] ?? base, updatedAt: now, source: 'test' }));
+    // groupType và companyName theo đúng hình dạng thật: /api/catalog dựng danh mục từ
+    // chính collection này, thiếu hai field đó là test không phản ánh được production.
+    .map((t) => ({
+      _id: t,
+      price: overrides[t] ?? base,
+      updatedAt: now,
+      source: 'test',
+      groupType: groupTypeOfTicker(t),
+      companyName: `Công ty ${t}`
+    }));
   await Price.insertMany(rows);
 }
 

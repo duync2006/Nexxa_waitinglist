@@ -4,6 +4,12 @@ import { useEffect, useState } from 'react';
 // nếu không thì hai bên cùng đẩy scrollLeft và chuyển động bị giật.
 const RESUME_DELAY = 1200;
 
+// Chốt chặn: dừng quá lâu thì tự chạy lại. Mỗi sự kiện kết thúc chạm bị sót là dải đứng
+// im vĩnh viễn (đã dính đúng lỗi đó với touchcancel), mà danh sách sự kiện kết thúc còn
+// khác nhau giữa các trình duyệt. Giữ ngón tay yên trên dải đúng 10 giây mới chạm ngưỡng
+// này, nên nó không cướp quyền dừng của người dùng trong thực tế.
+const MAX_PAUSE = 10000;
+
 /**
  * Dải trượt ngang vô tận. Trả về hai ref: gắn `scrollRef` vào khung cuộn, `trackRef` vào
  * dải bên trong — dải phải chứa ĐÚNG HAI nhóm giống hệt nhau, vì vòng lặp hoạt động bằng
@@ -36,23 +42,29 @@ export function useMarquee(speed) {
     // Vị trí thật, giữ ở dạng số thực. el.scrollLeft chỉ là nơi ĐỔ kết quả ra.
     let pos = el.scrollLeft;
 
+    let pausedAt = 0;
+
+    const resume = () => {
+      // Đồng bộ lại từ DOM đúng một lần ở đây: người dùng vừa tự vuốt dải đi chỗ khác,
+      // chạy tiếp từ `pos` cũ sẽ làm dải nhảy ngược về vị trí trước khi họ chạm vào.
+      pos = el.scrollLeft;
+      paused = false;
+    };
     const pause = () => {
+      if (!paused) pausedAt = performance.now();
       paused = true;
       clearTimeout(resumeTimer);
     };
     const resumeLater = () => {
       clearTimeout(resumeTimer);
-      resumeTimer = setTimeout(() => {
-        // Đồng bộ lại từ DOM đúng một lần ở đây: người dùng vừa tự vuốt dải đi chỗ khác,
-        // chạy tiếp từ `pos` cũ sẽ làm dải nhảy ngược về vị trí trước khi họ chạm vào.
-        pos = el.scrollLeft;
-        paused = false;
-      }, RESUME_DELAY);
+      resumeTimer = setTimeout(resume, RESUME_DELAY);
     };
 
     const step = (now) => {
       const dt = Math.min((now - last) / 1000, 0.05);
       last = now;
+
+      if (paused && now - pausedAt > MAX_PAUSE) resume();
 
       if (!paused) {
         // Đo bề rộng nhóm mỗi khung hình thay vì tính sẵn: số mục, bề rộng thẻ hay gap đổi
@@ -81,6 +93,10 @@ export function useMarquee(speed) {
     el.addEventListener('pointercancel', resumeLater);
     el.addEventListener('touchstart', pause, { passive: true });
     el.addEventListener('touchend', resumeLater, { passive: true });
+    // touchcancel BẮT BUỘC phải có: khi ngón tay đặt lên dải rồi vuốt dọc để cuộn trang,
+    // Safari huỷ cử chỉ chạm bằng touchcancel chứ không phải touchend. Thiếu nó thì
+    // paused kẹt ở true và dải đứng im từ lần cuộn trang đầu tiên trở đi.
+    el.addEventListener('touchcancel', resumeLater, { passive: true });
     el.addEventListener('focusin', pause);
     el.addEventListener('focusout', resumeLater);
 
@@ -98,6 +114,7 @@ export function useMarquee(speed) {
       el.removeEventListener('pointercancel', resumeLater);
       el.removeEventListener('touchstart', pause);
       el.removeEventListener('touchend', resumeLater);
+      el.removeEventListener('touchcancel', resumeLater);
       el.removeEventListener('focusin', pause);
       el.removeEventListener('focusout', resumeLater);
       el.removeEventListener('pointerenter', onEnter);

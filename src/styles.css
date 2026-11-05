@@ -170,7 +170,33 @@ button:disabled { opacity: 0.6; cursor: not-allowed; }
 .chip:active { cursor: grabbing; }
 .chip[aria-pressed='true'] { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(var(--accent-rgb), 0.25); }
 .chip-t { font-weight: 800; letter-spacing: 0.02em; }
-.chip-n { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 140px; }
+/* Tên công ty là tên pháp lý đầy đủ từ server, dài nhất 61 ký tự. Cho xuống tối đa 2 dòng
+   và nới max-width lên 190px: đã đo cả 50 mã ở 1280px, 140px cắt mất 18 tên, 170px còn 2,
+   190px thì không tên nào bị cắt; rộng hơn nữa chỉ làm chip to vô ích. height CỐ ĐỊNH
+   đúng 2 dòng để các chip trong lưới wrap cao bằng nhau, không so le. */
+.chip-n {
+  font-size: 12px;
+  color: var(--muted);
+  max-width: 190px;
+  line-height: 1.25;
+  height: 2.5em; /* 2 × 1.25 — đổi line-height phải đổi cả số này */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+/* Màn hẹp: nới max-width vô ích vì chip đã chiếm gần hết bề ngang (đo ở 390px: vùng chứa
+   284px, chip rộng nhất 264px), tên chỉ còn ~150px nên 20/50 mã vẫn tràn quá 2 dòng.
+   Cho tên xuống hẳn một hàng riêng trong chip để nó dùng trọn bề ngang — mã và giá ở
+   hàng trên, tên 2 dòng ở hàng dưới. */
+@media (max-width: 560px) {
+  .pool-chips .chip { flex-wrap: wrap; row-gap: 2px; }
+  .pool-chips .chip-t { order: 1; }
+  .pool-chips .chip-p { order: 2; margin-left: auto; }
+  .pool-chips .chip-n { order: 3; flex-basis: 100%; max-width: 100%; }
+}
 /* Giá là huy hiệu vàng nằm giữa cạnh phải chip, cùng kiểu viền-nền với .chip-tag của VIP.
    Vẫn nằm trong luồng flex nên .chip tự canh giữa theo chiều dọc và tự nới rộng vừa đủ —
    đặt absolute thì huy hiệu sẽ phủ lên tên công ty, vì chip không biết chừa chỗ cho nó.
@@ -285,11 +311,11 @@ button:disabled { opacity: 0.6; cursor: not-allowed; }
 .invite-foot { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 13px; color: var(--muted-2); }
 
 /* Tiers */
-.card.signup { max-width: none; width: 100%; margin-bottom: 10px; }
+.card.signup { max-width: none; width: 100%; margin-bottom: 5px; }
 /* width:100% la bat buoc: .hero-copy la flex column co align-items:center, nen con khong
    gian theo container ma co theo noi dung cua chinh no — o day la ca track 3888px, lam
    overflow:hidden ben duoi mat tac dung va dai the tran ra ngoai mep man hinh. */
-.featured { min-width: 0; width: 100%; display: flex; flex-direction: column; gap: 0px; margin-top: -15px }
+.featured { min-width: 0; width: 100%; display: flex; flex-direction: column; margin-top: -15px }
 .featured-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex-wrap: wrap; }
 .featured-title { font-size: 16px; font-weight: 700; }
 /* Cuộn ngang thật, không phải animation: hook useMarquee tự đẩy scrollLeft mỗi khung
@@ -308,27 +334,71 @@ button:disabled { opacity: 0.6; cursor: not-allowed; }
   scroll-behavior: auto;
   overscroll-behavior-x: contain;
   scrollbar-width: none;
-  /* Mép mờ co theo bề rộng: 56px cố định ăn mất gần 30%% một màn 390px. */
+}
+.featured-scroll::-webkit-scrollbar { display: none; }
+/* Mask ĐEO Ở ĐÂY chứ không đeo thẳng lên .featured-scroll. Trên iOS, mask-image ép phần tử
+   thành composited layer riêng; nếu layer đó chính là khung cuộn thì WebKit phải vẽ cả vùng
+   nội dung 16.000px theo từng tile, và khi JS đẩy scrollLeft mỗi khung hình nó không kịp vẽ
+   tile phía trước — chạy hết vòng một là thấy một mảng trống dài trôi qua rồi vòng hai mới
+   hiện. Đeo lên lớp bọc thì layer bị mask chỉ rộng bằng màn hình, khung cuộn bên trong
+   không còn bị tile hoá.
+   Mép mờ co theo bề rộng: 56px cố định ăn mất gần 30% một màn 390px.
+   Mask chỉ theo chiều ngang nên tag VIP nhô lên trên cạnh thẻ vẫn nguyên vẹn. */
+.featured-mask {
   --fade: min(56px, 8vw);
-  /* Làm mờ dần hai mép thay vì cắt cụt giữa thẻ. Không có nó thì mép trái luôn hiện một
-     thẻ bị xén dở kèm cái tag VIP lơ lửng — trông như lỗi layout chứ không phải dải trượt.
-     Mask chỉ theo chiều ngang nên tag VIP nhô lên trên cạnh thẻ vẫn nguyên vẹn. */
+  min-width: 0;
   -webkit-mask-image: linear-gradient(to right, transparent 0, #000 var(--fade), #000 calc(100% - var(--fade)), transparent 100%);
   mask-image: linear-gradient(to right, transparent 0, #000 var(--fade), #000 calc(100% - var(--fade)), transparent 100%);
 }
-.featured-scroll::-webkit-scrollbar { display: none; }
 .featured-track { display: flex; width: max-content; }
 /* padding-right PHẢI bằng gap: điểm nối giữa hai nhóm lấy khoảng cách từ padding này, lệch
    một chút là cứ mỗi vòng lại thấy một cặp thẻ sát vào nhau. */
-.featured-group { display: flex; gap: var(--featured-gap); padding-right: var(--featured-gap); }
-.featured-item { position: relative; flex: 0 0 116px; display: flex; flex-direction: column; gap: 1px; padding: 9px 11px; border-radius: 11px; background: var(--surface); border: 1px solid var(--line); }
-.featured-t { font-size: 15px; font-weight: 800; letter-spacing: 0.02em; color: var(--accent); }
-/* Một dòng, cắt bằng ellipsis: tên dài như "Cơ điện lạnh REE" trước đây xuống hai dòng nên
-   thẻ cao thấp lệch nhau, dải trượt nhìn như răng cưa. Tên đầy đủ nằm ở title của thẻ. */
-.featured-n { font-size: 11px; font-weight: 600; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* flex: 0 0 auto để nhóm không bị co cũng không bị giãn. Mặc định flex item có
+   flex-shrink:1; nếu trình duyệt tính max-content của track ra sai thì nhóm 1 có thể bị
+   kéo giãn rộng hơn tổng các thẻ bên trong, để lại một mảng trống ở cuối nhóm — đúng
+   hiện tượng thấy trên iOS. */
+.featured-group { display: flex; flex: 0 0 auto; gap: var(--featured-gap); padding-right: var(--featured-gap); }
+/* min-width: 0 BẮT BUỘC: flex item mặc định là min-width:auto, nghĩa là không co được
+   xuống dưới bề rộng nội dung. .featured-n đặt white-space:nowrap nên tên công ty dài
+   đẩy thẻ phình ra, flex-basis 116px bị bỏ qua và text-overflow:ellipsis không bao giờ
+   chạy. Chỉ lộ ra khi tên lấy từ server (tên pháp lý đầy đủ) thay cho tên ngắn chép tay. */
+/* width + max-width ĐI KÈM flex-basis, không thừa: .featured-track dùng width:max-content,
+   mà WebKit tính max-content của nhóm bằng bề rộng văn bản MỘT DÒNG của từng thẻ chứ không
+   theo flex-basis. Với tên pháp lý dài (~250px/thẻ) nhóm phình từ 8.000 lên 12.924px trên
+   iOS — đo thật trên iPhone 15 — tạo ra ~4.900px trống ở đuôi nhóm, tức gần 50 giây dải
+   chạy qua chỗ rỗng rồi vòng sau mới hiện. Khai báo width dứt khoát thì max-content của
+   thẻ bị chặn ở 152px. Chrome không lộ vì tính max-content theo flex-basis.
+   min-width: 0 giữ nguyên để thẻ không nở ra theo nội dung. */
+.featured-item { position: relative; flex: 0 0 152px; width: 152px; min-width: 0; max-width: 152px; display: flex; flex-direction: column; gap: 1px; padding: 9px 11px; border-radius: 11px; background: var(--surface); border: 1px solid var(--line); }
+.featured-t { font-size: 15px; font-weight: 800; letter-spacing: 0.02em; color: var(--accent); margin-top: -5px;}
+/* Ba dòng để hiện ĐỦ tên pháp lý ("Ngân hàng Thương mại Cổ phần Ngoại thương Việt Nam" —
+   TB 40 ký tự, dài nhất 61). Đã đo cả 50 mã: 2 dòng cắt mất 38/100 thẻ, 3 dòng thì 0 thẻ
+   bị cắt; nới thẻ rộng hơn 152px không giảm thêm nên giữ 152px.
+   height CỐ ĐỊNH đúng 3 dòng, không phải min-height: tên ngắn như "FPT" chỉ chiếm 1 dòng,
+   nếu để thẻ tự co thì thẻ cao thẻ thấp và dải trượt nhìn như răng cưa. */
+.featured-n {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--muted);
+  line-height: 1.25;
+  height: 3.75em; /* 3 × 1.25 — khớp đúng ba dòng, đổi line-height phải đổi cả số này */
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  /* Tên dài không có khoảng trắng vẫn phải cắt được, không thì tràn ngang ra khỏi thẻ */
+  overflow-wrap: anywhere;
+  /* Canh giữa theo chiều dọc trong vùng 3 dòng: với -webkit-box-orient: vertical thì
+     -webkit-box-pack điều khiển trục dọc. Tên 1–2 dòng nhờ vậy không dồn lên sát mã,
+     để lại một mảng trống dưới sát giá. */
+  -webkit-box-pack: center;
+  /* margin-top: -3px; */
+  /* margin-bottom: -3px; */
+}
 /* Giá để màu --ink chứ không mượn tông vàng của .chip-tag: vàng đang là dấu hiệu riêng của
    nhóm VIP, dùng cho cả giá thì mã Standard cũng trông như VIP. */
-.featured-p { margin-top: 3px; font-size: 12.5px; font-weight: 700; letter-spacing: 0.01em; color: var(--ink); }
+.featured-p { margin-top: 0px; font-size: 12.5px; font-weight: 700; letter-spacing: 0.01em; color: var(--ink); margin-bottom: -5px }
 .tiers-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
 .tier-card { display: flex; flex-direction: column; gap: 12px; padding: 18px; border-radius: 16px; background: var(--surface); border: 1.5px solid var(--line); }
 .tier-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
@@ -344,12 +414,24 @@ button:disabled { opacity: 0.6; cursor: not-allowed; }
    giá trị rồi tới số suất còn lại, đọc liền một mạch. */
 /* margin-top thêm vào gap của .hero-copy: khối khan hiếm là một đơn vị riêng, cách cụm chữ
    bên trên rộng hơn khoảng cách giữa hai dòng trong cụm đó. */
-.scarcity { display: flex; flex-direction: column; align-items: center; gap: 8px; width: 100%; max-width: 58ch; margin-top: 2px; margin-inline: auto; margin-bottom: -40px; }
-.scarcity-line { display: flex; align-items: baseline; gap: 7px; }
-.scarcity-num { font-size: clamp(17px, 1.7vw, 20px); font-weight: 700; color: var(--accent); letter-spacing: 0.01em; }
-.scarcity-of { font-size: 15px; color: var(--muted); }
-.scarcity-bar { width: 100%; max-width: 320px; }
-.scarcity .bar-fill { background: var(--accent); }
+.scarcity { display: flex; flex-direction: column; align-items: center; gap: 12px; width: 100%; max-width: 58ch; margin-top: 2px; margin-inline: auto; margin-bottom: -40px; }
+/* Hai thanh riêng xếp chồng: VIP và Standard mỗi nhóm một hàng, một màu, số liệu riêng.
+   Vàng của VIP lấy từ ENTITLEMENT_STYLE.top.bar (#D69A00) — vàng là dấu hiệu riêng của VIP
+   trên toàn trang nên không dùng cho Standard. */
+.scarcity-stack { display: flex; flex-direction: column; gap: 14px; width: 100%; max-width: 340px; }
+.scarcity-row { display: flex; flex-direction: column; gap: 6px; }
+.scarcity-row-head { display: flex; align-items: baseline; gap: 8px; }
+.scarcity-row-hint { font-size: 12px; color: var(--muted); }
+.scarcity-row-left { margin-left: auto; font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.scarcity-row-left b { font-size: 15px; font-weight: 700; color: var(--ink); }
+.scarcity-seg-label { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+/* Chấm màu đứng trước nhãn để nhãn khớp với màu thanh bên dưới */
+.scarcity-seg-label::before { content: ''; flex: none; width: 8px; height: 8px; border-radius: 50%; }
+.scarcity-seg-bar { height: 8px; border-radius: 4px; }
+.scarcity-row .bar-fill { border-radius: 4px; }
+.scarcity-seg-vip .scarcity-seg-bar { background: rgba(214, 154, 0, 0.22); }
+.scarcity-seg-vip .bar-fill, .scarcity-seg-vip .scarcity-seg-label::before { background: #D69A00; }
+.scarcity-seg-std .bar-fill, .scarcity-seg-std .scarcity-seg-label::before { background: var(--accent); }
 .scarcity-rate { font-size: 14px; color: var(--muted); }
 
 .bar { height: 6px; border-radius: 3px; background: var(--bar-track); overflow: hidden; }

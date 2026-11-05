@@ -1,5 +1,5 @@
 import { PRICE_MAX_AGE_MS } from '../config/constants.js';
-import { ENTITLEMENTS, RESERVABLE } from '../../shared/catalog.js';
+import { ENTITLEMENTS, RESERVABLE, groupTypeOfTicker } from '../../shared/catalog.js';
 import { Price } from '../models/index.js';
 import { unavailable } from '../utils/app-error.js';
 import { fetchPrices, tickersToFetch, SOURCE_NAME } from './price-source.js';
@@ -83,19 +83,22 @@ export async function refreshPrices() {
   const ops = [];
   const missing = [];
   for (const t of tickers) {
-    const price = Number(prices[t]);
+    const row = prices[t];
+    const price = Number(row?.price);
     // Mã nguồn không trả về (hoặc trả số vô nghĩa) thì bỏ qua để giữ giá cũ.
     if (!Number.isFinite(price) || price <= 0) {
       missing.push(t);
       continue;
     }
-    ops.push({
-      updateOne: {
-        filter: { _id: t },
-        update: { $set: { price, updatedAt: now, source: SOURCE_NAME } },
-        upsert: true
-      }
-    });
+    // groupType ghi lại mỗi lần chạy chứ không chỉ lúc tạo dòng mới: mã chuyển nhóm
+    // trong catalog (VN30 vào/ra) thì snapshot phải đi theo, và những dòng ghi từ
+    // trước khi có field này cũng được điền luôn ở lần chạy kế tiếp.
+    const $set = { price, updatedAt: now, source: SOURCE_NAME, groupType: groupTypeOfTicker(t) };
+    // Chỉ ghi đè tên khi nguồn thật sự trả về tên. Nguồn bỏ trống mà vẫn $set null thì
+    // lần chạy đó xoá sạch tên đang có, và frontend mất chữ dưới mã cổ phiếu.
+    if (row.companyName) $set.companyName = row.companyName;
+
+    ops.push({ updateOne: { filter: { _id: t }, update: { $set }, upsert: true } });
   }
 
   if (ops.length === 0) {

@@ -3,6 +3,9 @@
 // TOTAL_SLOTS được khai báo hai nơi độc lập — sửa một nơi là lệch. Giờ cả hai cùng đọc từ đây.
 
 export const TOTAL_SLOTS = 1000;
+// Số suất nhóm Standard (hạng #1.001 trở đi). Chỉ dùng để HIỂN THỊ thanh khan hiếm; server
+// chưa chặn đăng ký khi vượt tổng TOTAL_SLOTS + STANDARD_SLOTS.
+export const STANDARD_SLOTS = 9000;
 
 const S = (s) => s.split(';').map((p) => { const [t, n] = p.split('|'); return { t, n }; });
 
@@ -29,6 +32,18 @@ export const RESERVABLE_TICKERS = new Set(Object.values(RESERVABLE).flat().map((
 // Tra nhóm của một mã. Hai pool không có mã nào trùng nhau nên map này là 1-1.
 export const POOL_OF_TICKER = Object.fromEntries(
   POOLS.flatMap((p) => RESERVABLE[p.key].map((s) => [s.t, p.key]))
+);
+
+// Dạng lưu xuống field `groupType` của collection `prices`: 'VIP' | 'STANDARD'.
+// Suy ra từ POOL_OF_TICKER chứ không chép tay thành bảng thứ hai — thêm/bớt mã trong
+// STOCKS là nó tự đúng theo, không có chuyện hai nơi lệch nhau.
+export const groupTypeOfTicker = (ticker) => POOL_OF_TICKER[ticker]?.toUpperCase() ?? null;
+
+// Tên ngắn của từng mã. Nguồn giá trả tên pháp lý đầy đủ và đó mới là thứ lưu xuống
+// `prices.companyName`; bảng này chỉ dùng khi nguồn không có tên (giá demo), và làm dữ
+// liệu dự phòng cho frontend lúc API chưa trả về.
+export const NAME_OF_TICKER = Object.fromEntries(
+  Object.values(RESERVABLE).flat().map((s) => [s.t, s.n])
 );
 
 // Quyền chọn cổ phiếu theo hạng trong waitlist. Thay cho bảng TIERS cũ

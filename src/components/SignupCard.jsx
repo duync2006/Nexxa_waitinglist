@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from '../lib/api.js';
-import { tierOfRank } from '../lib/data.js';
+import { useCatalog } from '../lib/catalog.jsx';
 import { fmt, vnd } from '../lib/format.js';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -189,6 +189,7 @@ export default function SignupCard({ me, onJoined, onReset, onOpenReserve, pendi
 }
 
 function Result({ me, returning, onReset, onOpenReserve }) {
+  const { tierOfRank } = useCatalog();
   const [copied, setCopied] = useState(false);
   const myTier = tierOfRank(me.rank);
   const invitesTo = (target) => Math.max(1, Math.ceil((me.rank - target) / 10));
