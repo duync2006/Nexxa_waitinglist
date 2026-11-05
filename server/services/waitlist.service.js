@@ -1,4 +1,4 @@
-import { BOOST } from '../config/constants.js';
+import { BOOST, LEADERBOARD_PAGE_SIZE, POINTS_PER_INVITE } from '../config/constants.js';
 import { TOTAL_SLOTS } from '../../shared/catalog.js';
 import { User, nextJoinIndex } from '../models/index.js';
 import { randomRefCode } from '../utils/codes.js';
@@ -28,6 +28,35 @@ export async function listRecentJoins(limit = RECENT_JOINS) {
   return users.map((u) => ({ masked: maskEmail(u.email), at: u.createdAt }));
 }
 
+// Điểm = số lượt mời × POINTS_PER_INVITE. Không lưu riêng: suy ra từ invites nên không bao
+// giờ lệch nhau, và sắp theo invites cũng chính là sắp theo điểm.
+export const pointsOf = (invites) => (invites || 0) * POINTS_PER_INVITE;
+
+// Thứ tự xếp hạng: điểm cao trước, bằng điểm thì ai đăng ký trước đứng trên.
+// Chạy trên index { invites: -1, joinIndex: 1 }. Phải khớp với rankOf bên dưới.
+export const RANK_ORDER = { invites: -1, joinIndex: 1 };
+
+// Bảng xếp hạng công khai, phân trang. Chỉ trả email đã che.
+// cutoff = điểm của người đứng hạng TOTAL_SLOTS (ngưỡng VIP); null khi chưa đủ người.
+// page vượt quá số trang thì trả top rỗng chứ không báo lỗi.
+export async function getLeaderboard(page = 1, pageSize = LEADERBOARD_PAGE_SIZE) {
+  const p = Number.isInteger(page) && page > 0 ? page : 1;
+  const skip = (p - 1) * pageSize;
+  const [rows, total, edge] = await Promise.all([
+    User.find({}).sort(RANK_ORDER).skip(skip).limit(pageSize).select('email invites').lean(),
+    countUsers(),
+    User.find({}).sort(RANK_ORDER).skip(TOTAL_SLOTS - 1).limit(1).select('invites').lean()
+  ]);
+  return {
+    top: rows.map((u, i) => ({ rank: skip + i + 1, masked: maskEmail(u.email), points: pointsOf(u.invites) })),
+    page: p,
+    pageSize,
+    total,
+    totalPages: Math.max(1, Math.ceil(total / pageSize)),
+    cutoff: edge.length ? pointsOf(edge[0].invites) : null
+  };
+}
+
 export async function getStats() {
   // last24h cho trang biết TỐC ĐỘ lấp suất, không chỉ số suất còn lại: "còn 989" là tĩnh,
   // "37 người đăng ký hôm qua" mới nói lên bao giờ hết.
@@ -47,13 +76,14 @@ export async function getStats() {
   };
 }
 
-// Hạng = số người đứng trên + 1. Đứng trên nghĩa là score nhỏ hơn, hoặc bằng score
-// nhưng đăng ký trước. Chạy trên index { score: 1, joinIndex: 1 }.
+// Hạng = số người đứng trên + 1. Đứng trên nghĩa là nhiều điểm (lượt mời) hơn, hoặc bằng
+// điểm nhưng đăng ký trước. Phải khớp đúng RANK_ORDER của bảng xếp hạng.
 export async function rankOf(user) {
+  const invites = user.invites || 0;
   const ahead = await User.countDocuments({
     $or: [
-      { score: { $lt: user.score } },
-      { score: user.score, joinIndex: { $lt: user.joinIndex } }
+      { invites: { $gt: invites } },
+      { invites, joinIndex: { $lt: user.joinIndex } }
     ]
   });
   return ahead + 1;
@@ -110,7 +140,8 @@ export async function join(email, referredByCode) {
     throw err;
   }
 
-  // Cộng điểm cho người mời: +1 lượt mời, -10 điểm, và ghi _id người được mời.
+  // Cộng điểm cho người mời: +1 lượt mời (= +10 điểm), ghi _id người được mời. score cũ
+  // vẫn được cập nhật để dữ liệu nhất quán, dù không còn dùng để xếp hạng.
   // Cả ba nằm trong MỘT lệnh update nên invites và referees không bao giờ lệch nhau.
   if (user.referrer) {
     await User.updateOne(

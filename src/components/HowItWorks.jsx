@@ -1,62 +1,30 @@
-// Nội dung giữ nguyên từng chữ, chỉ thêm `group` để biết mỗi dòng thuộc tầng nào. Trước đây
-// cả 10 mục đổ vào một danh sách phẳng cùng cỡ chữ cùng kiểu ô, nên "1.000 người đăng ký đầu
-// tiên được cổ phiếu VIP" nằm ngang hàng với "áp dụng điều khoản chương trình".
-const REWARDS = [
-  { title: '1.000 Người Đăng Ký Đầu Tiên', body: 'Thưởng cổ phiếu VIP', group: 'reward', tier: 'vip' },
-  { title: 'TOP 1.000 Người Giới Thiệu', body: 'Thưởng cổ phiếu VIP', group: 'reward', tier: 'vip' },
-  { title: 'Danh Sách Chờ TIÊU CHUẨN', body: 'Thưởng cổ phiếu tiêu chuẩn', group: 'reward', tier: 'std' },
-  { title: 'Giới Thiệu', body: 'Giới thiệu nhiều, lên TOP nhanh', group: 'how' },
-  { title: 'Quỹ Thưởng Tăng Dần', body: 'Càng đông, thưởng càng lớn', group: 'how' },
-  { title: 'Chuỗi Hàng Tháng', body: 'Mua cổ phiếu, tặng cổ phiếu thưởng', group: 'how' },
-  { title: 'Hạn Chế Cổ Phiếu Thưởng', body: 'Nắm giữ cổ phiếu thưởng 1 năm', group: 'term' },
-  { title: 'Xác Minh', body: 'Hoàn tất đăng ký và eKYC', group: 'term' },
-  { title: 'Thời Điểm Thưởng', body: 'Thưởng bắt đầu sau khi ra mắt', group: 'term' },
-  { title: 'Điều Kiện', body: 'Áp dụng điều khoản chương trình', group: 'term' }
-];
+import NexxaBot from './NexxaBot.jsx';
 
-const byGroup = (g) => REWARDS.filter((r) => r.group === g);
-
-// Chip "Thưởng cổ phiếu VIP" chỉ cần hai chữ cuối: cột bên phải của mọi dòng đều là phần
-// thưởng rồi, lặp lại "Thưởng" ở từng dòng là ba lần nói cùng một từ trong một bảng.
-const giftLabel = (body) => {
-  const s = body.replace(/^Thưởng\s+/, '');
-  return s.charAt(0).toUpperCase() + s.slice(1);
-};
-
+// Thẻ giới thiệu Chương trình thưởng trên trang chính. Chi tiết (hạng thưởng, cách nhận
+// thêm, bảng xếp hạng, điều khoản) đã nằm ở trang Phần thưởng (#/rewards), nên ở đây chỉ
+// giữ đúng một lời hứa + hai mức thưởng để người đọc có lý do bấm sang. Cả thẻ là một
+// liên kết: vùng bấm lớn trên điện thoại, không bắt người ta nhắm vào một dòng chữ nhỏ.
 export default function HowItWorks() {
   return (
     <section className="container section section-last">
-      <h2 className="h2">Chương trình thưởng</h2>
-
-      {/* Bảng "ai → được gì": mỗi dòng một vế, phần thưởng là chip màu bên phải. Chip vàng
-          dùng đúng --tag-bg/--tag-ink của tag VIP trên dải cổ phiếu, nên người đọc đã thấy
-          màu đó ở hero sẽ nhận ra VIP ở đây mà không cần đọc chữ. */}
-      <ul className="reward-table">
-        {byGroup('reward').map((r) => (
-          <li key={r.title} className="reward-row">
-            <span className="reward-who">{r.title}</span>
-            <span className={`reward-gift reward-gift-${r.tier}`}>{giftLabel(r.body)}</span>
-          </li>
-        ))}
-      </ul>
-
-      {/* Cơ chế: không phải phần thưởng nên không vào bảng, nhưng cũng không phải điều khoản
-          nên không xuống chân khối. Chip viền nhẹ là tầng giữa. */}
-      <ul className="reward-how">
-        {byGroup('how').map((r) => (
-          <li key={r.title} className="reward-chip">
-            <span className="reward-chip-t">{r.title}</span>
-            <span className="reward-chip-b">{r.body}</span>
-          </li>
-        ))}
-      </ul>
-
-      {/* Bốn mục điều kiện gộp một dòng chân khối, nhãn lấy luôn từ mục "Điều Kiện" —
-          không mục nào bị bỏ chữ, chỉ bớt bốn cái tiêu đề không mang thông tin. */}
-      <p className="reward-terms">
-        <strong>Điều kiện</strong>
-        {byGroup('term').map((r) => r.body).join(' · ')}
-      </p>
+      <a className="promo" href="#/rewards">
+        <div className="promo-text">
+          <span className="promo-eyebrow">Chương trình thưởng</span>
+          <h2 className="promo-title">Nhận cổ phiếu trị giá đến 100.000đ</h2>
+          <div className="promo-tiers">
+            <span className="promo-tier promo-tier-vip"><b>VIP</b> 100.000đ</span>
+            <span className="promo-tier promo-tier-std"><b>Tiêu chuẩn</b> 50.000đ</span>
+          </div>
+          <span className="promo-cta">
+            Xem chi tiết
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6" /></svg>
+          </span>
+        </div>
+        <div className="promo-art" aria-hidden="true">
+          <NexxaBot width={64} className="promo-bot" />
+          <span className="promo-shadow" />
+        </div>
+      </a>
     </section>
   );
 }

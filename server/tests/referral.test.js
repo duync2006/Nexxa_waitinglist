@@ -37,20 +37,19 @@ describe('Cộng điểm cho người mời', () => {
   });
 
   it('người mời vượt lên trên những người đăng ký trước mình', async () => {
-    // u1 đăng ký đầu tiên VÀ mời được 1 người  -> score 1 - 10 = -9
+    // u1 đăng ký đầu tiên VÀ mời được 1 người  -> 10 điểm
     const u1 = await joinViaApi(request, app, 'u1@test.local');
     await joinViaApi(request, app, 'cua-u1@test.local', u1.body.refCode);
-    // u2, u3 đăng ký, không mời ai            -> score 3, 4
+    // u2, u3 đăng ký, không mời ai            -> 0 điểm
     for (const n of [2, 3]) await joinViaApi(request, app, `u${n}@test.local`);
 
-    const late = await joinViaApi(request, app, 'late@test.local'); // joinIndex 5, score 5
-    assert.equal(late.body.rank, 5); // sau u1 (-9), cua-u1 (2), u2 (3), u3 (4)
+    const late = await joinViaApi(request, app, 'late@test.local'); // joinIndex 5, 0 điểm
+    assert.equal(late.body.rank, 5); // sau u1 (10 điểm), rồi cua-u1, u2, u3 (0 điểm, vào trước)
 
     await joinViaApi(request, app, 'moi@test.local', late.body.refCode);
 
-    // score 5 - 10 = -5: vượt qua u2 và u3, nhưng vẫn sau u1 vì -9 < -5.
-    // Trừ 10 ĐIỂM, không phải nhảy 10 HẠNG — leo được bao nhiêu hạng tuỳ vào
-    // có bao nhiêu người nằm trong khoảng điểm đó.
+    // 10 điểm: vượt cua-u1, u2, u3 (0 điểm), nhưng vẫn sau u1 — bằng điểm thì ai
+    // đăng ký trước đứng trên.
     const res = await request(app).post('/api/waitlist/check').send({ email: 'late@test.local' });
     assert.equal(res.body.profile.rank, 2);
   });

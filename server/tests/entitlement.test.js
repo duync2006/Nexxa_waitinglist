@@ -17,8 +17,8 @@ beforeEach(async () => {
 });
 
 // Tạo user trực tiếp trong DB: đi qua API thì 1.000 user mất vài phút, mà ở đây chỉ cần
-// score và joinIndex đúng để rankOf tính ra hạng mong muốn.
-async function makeUsers(count, { startIndex = 1, score } = {}) {
+// invites và joinIndex đúng để rankOf tính ra hạng mong muốn.
+async function makeUsers(count, { startIndex = 1, invites = 0 } = {}) {
   const docs = [];
   for (let i = 0; i < count; i++) {
     const n = startIndex + i;
@@ -26,8 +26,8 @@ async function makeUsers(count, { startIndex = 1, score } = {}) {
       email: `u${n}@test.local`,
       refCode: `T${String(n).padStart(5, '0')}`,
       joinIndex: n,
-      score: score === undefined ? n : score(n),
-      invites: 0,
+      score: n,
+      invites,
       referrer: null,
       referredBy: null,
       referees: [],
@@ -113,8 +113,8 @@ describe('Chốt quyền lợi ở lần Reserve đầu tiên', () => {
     assert.equal(first.status, 200);
     assert.equal(first.body.budget, 100000);
 
-    // Đẩy user xuống dưới hạng 1.000: thêm 1.200 người có score nhỏ hơn.
-    await makeUsers(1200, { startIndex: 10000, score: (n) => -n });
+    // Đẩy user xuống dưới hạng 1.000: thêm 1.200 người nhiều điểm hơn.
+    await makeUsers(1200, { startIndex: 10000, invites: 1 });
 
     const res = await options(email);
 
@@ -127,7 +127,7 @@ describe('Chốt quyền lợi ở lần Reserve đầu tiên', () => {
   it('vẫn chọn được mã VIP sau khi hạng đã trôi', async () => {
     const email = await userAtRank(3);
     await request(app).post('/api/reserve').send({ email, tickers: ['VCB'] });
-    await makeUsers(1200, { startIndex: 10000, score: (n) => -n });
+    await makeUsers(1200, { startIndex: 10000, invites: 1 });
 
     const res = await request(app).post('/api/reserve').send({ email, tickers: ['FPT', 'HPG'] });
 

@@ -241,3 +241,58 @@ describe('POST /api/waitlist/check', () => {
     assert.deepEqual(res.body.profile, joined.body);
   });
 });
+
+describe('POST /api/leaderboard', () => {
+  const seed = (n, invitesOf = () => 0) =>
+    User.insertMany(Array.from({ length: n }, (_, i) => ({
+      email: `user${i + 1}@test.local`, refCode: `LB${String(i + 1).padStart(4, '0')}`,
+      joinIndex: i + 1, score: i + 1, invites: invitesOf(i + 1)
+    })));
+
+  it('xếp theo điểm, bằng điểm thì ai vào trước đứng trên; email được che', async () => {
+    await User.insertMany([
+      { email: 'anhnguyen@test.local', refCode: 'AAA001', joinIndex: 1, score: 1, invites: 0 },
+      { email: 'binhtran@test.local', refCode: 'BBB001', joinIndex: 2, score: -28, invites: 3 },
+      { email: 'cuongle@test.local', refCode: 'CCC001', joinIndex: 3, score: -27, invites: 3 }
+    ]);
+
+    const res = await request(app).post('/api/leaderboard');
+
+    assert.equal(res.status, 200);
+    assert.deepEqual(res.body.top.map((r) => [r.rank, r.points]), [[1, 30], [2, 30], [3, 0]]);
+    assert.equal(res.body.top[0].masked, 'bi•••••n@test.local');
+    assert.equal(res.body.cutoff, null);
+    assert.ok(!JSON.stringify(res.body).includes('binhtran'));
+  });
+
+  it('mỗi trang 7 người, page 2 tiếp nối hạng của page 1', async () => {
+    await seed(10);
+
+    const p1 = await request(app).post('/api/leaderboard').send({ page: 1 });
+    const p2 = await request(app).post('/api/leaderboard').send({ page: 2 });
+
+    assert.deepEqual(p1.body.top.map((r) => r.rank), [1, 2, 3, 4, 5, 6, 7]);
+    assert.deepEqual(p2.body.top.map((r) => r.rank), [8, 9, 10]);
+    assert.equal(p1.body.total, 10);
+    assert.equal(p1.body.totalPages, 2);
+  });
+
+  it('page không hợp lệ thì về trang 1, vượt quá thì trả rỗng', async () => {
+    await seed(3);
+
+    const bad = await request(app).post('/api/leaderboard').send({ page: 'abc' });
+    const far = await request(app).post('/api/leaderboard').send({ page: 99 });
+
+    assert.equal(bad.body.page, 1);
+    assert.equal(bad.body.top.length, 3);
+    assert.deepEqual(far.body.top, []);
+  });
+
+  it('hạng trong profile khớp với bảng xếp hạng', async () => {
+    await seed(5, (n) => (n === 4 ? 2 : 0));
+
+    const res = await request(app).post('/api/waitlist/check').send({ email: 'user4@test.local' });
+
+    assert.equal(res.body.profile.rank, 1);
+  });
+});

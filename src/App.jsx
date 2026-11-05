@@ -9,6 +9,7 @@ import FeaturedStocks from './components/FeaturedStocks.jsx';
 import TierList from './components/TierList.jsx';
 import DcaCalculator from './components/DcaCalculator.jsx';
 import HowItWorks from './components/HowItWorks.jsx';
+import RewardsPage from './components/RewardsPage.jsx';
 import ThemeToggle from './components/ThemeToggle.jsx';
 import ReserveModal from './components/ReserveModal.jsx';
 import Scarcity from './components/Scarcity.jsx';
@@ -92,6 +93,26 @@ export default function App() {
   };
 
   const handleReset = () => setMe(null);
+
+  // Định tuyến bằng hash: site build dưới /waitlist/ nên không đụng tới đường dẫn, và không
+  // cần thêm thư viện router cho đúng một trang phụ.
+  const [route, setRoute] = useState(() => window.location.hash);
+  useEffect(() => {
+    const onHash = () => { setRoute(window.location.hash); window.scrollTo(0, 0); };
+    window.addEventListener('hashchange', onHash);
+    return () => window.removeEventListener('hashchange', onHash);
+  }, []);
+
+  if (route === '#/rewards') {
+    return (
+      <RewardsPage
+        me={me}
+        registered={registered}
+        totalSlots={totalSlots}
+        onBack={() => { window.location.hash = ''; }}
+      />
+    );
+  }
 
   return (
     <div className="page">

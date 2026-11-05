@@ -22,6 +22,7 @@ async function call(path, body = {}) {
 
 export const api = {
   stats: () => call('/api/stats'),
+  leaderboard: (page = 1) => call('/api/leaderboard', { page }),
   // Danh mục cổ phiếu, nhóm, số suất, bậc quà. Công khai, không phụ thuộc người dùng.
   catalog: () => call('/api/catalog'),
   requestOtp: (email, ref) => call('/api/waitlist/request-otp', { email, ref }),

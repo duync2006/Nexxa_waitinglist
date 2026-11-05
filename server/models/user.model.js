@@ -39,8 +39,8 @@ const userSchema = new Schema(
     // Số thứ tự xác thực email, cấp bởi collection counters. Không bao giờ đổi.
     joinIndex: { type: Number, required: true },
 
-    // score = joinIndex - BOOST * invites. Càng nhỏ hạng càng cao.
-    // Đây là giá trị lưu sẵn, không tính lại: đổi BOOST về sau không làm thay đổi điểm đã cộng.
+    // score = joinIndex - BOOST * invites. CŨ: hạng giờ xếp theo invites (điểm), xem
+    // RANK_ORDER trong waitlist.service.js. Vẫn giữ field để không xoá dữ liệu cũ.
     score: { type: Number, required: true },
 
     invites: { type: Number, required: true, default: 0 },
@@ -66,6 +66,8 @@ const userSchema = new Schema(
 // Trùng với index đã tồn tại trong DB: email_1, refCode_1, score_1_joinIndex_1.
 // Hai index unique khai báo qua `unique: true` ở trên; đây là index phục vụ xếp hạng.
 userSchema.index({ score: 1, joinIndex: 1 });
+// Phục vụ xếp hạng theo điểm (rankOf, bảng xếp hạng).
+userSchema.index({ invites: -1, joinIndex: 1 });
 // Phục vụ đếm "đăng ký trong 24h qua" ở /api/stats, gọi lại mỗi 30 giây từ mọi tab đang mở.
 userSchema.index({ createdAt: -1 });
 

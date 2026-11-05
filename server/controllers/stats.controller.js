@@ -4,3 +4,8 @@ import * as waitlist from '../services/waitlist.service.js';
 export async function getStats(_req, res) {
   res.json(await waitlist.getStats());
 }
+
+// Bảng xếp hạng công khai, body: { page } (mặc định 1).
+export async function getLeaderboard(req, res) {
+  res.json(await waitlist.getLeaderboard(Number(req.body?.page) || 1));
+}
