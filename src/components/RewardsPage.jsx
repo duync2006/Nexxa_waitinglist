@@ -10,19 +10,21 @@ const POINTS_PER_INVITE = 10;
 // site (--accent, --tag-*, --line...) chứ không chép bảng màu riêng của mockup, để trang này
 // đổi sáng/tối cùng phần còn lại.
 
+// Hero thấp (132px) để cả phần giới thiệu + thẻ trạng thái nằm gọn một màn điện thoại.
+// Ô bên phải neo theo cạnh phải nên không lệch khi khung rộng hơn 390px.
 const TILES = [
-  { t: 'FPT', x: 22, y: 26 },
-  { t: 'VCB', x: 262, y: 18 },
-  { t: 'HPG', x: 34, y: 140 },
-  { t: 'VNM', x: 250, y: 132 }
+  { t: 'MSB', style: { left: 16, top: 14 } },
+  { t: 'FPT', style: { left: 40, top: 70 } },
+  { t: 'VCB', style: { right: 16, top: 10 } },
+  { t: 'VNM', style: { right: 40, top: 66 } }
 ];
 
 const WAYS = [
-  { title: 'Mời bạn bè', body: 'Mỗi người hoàn tất đăng ký và eKYC', value: '+10 điểm',
+  { title: 'Mời bạn bè', body: 'Mỗi người hoàn tất đăng ký', value: '+10 điểm',
     icon: <><circle cx="9" cy="8" r="4" /><path d="M2 21c0-4 3-6 7-6s7 2 7 6" /><path d="M19 8v6M16 11h6" /></> },
   { title: 'Mua 1, tặng 1 mỗi tháng', body: 'Mua 1 cổ phiếu bất kỳ trong tháng, nhận thêm 1 cổ phiếu', value: '+1 CP',
     icon: <><path d="M17 2l4 4-4 4" /><path d="M3 11V9a3 3 0 0 1 3-3h15" /><path d="M7 22l-4-4 4-4" /><path d="M21 13v2a3 3 0 0 1-3 3H3" /></> },
-  { title: 'Đăng ký sớm', body: '1.000 người đăng ký đầu tiên nhận cổ phiếu VIP', value: 'VIP',
+  { title: 'Đăng ký sớm', body: 'Top 1000 người nhận cổ phiếu VIP', value: 'VIP',
     icon: <><circle cx="12" cy="13" r="8" /><path d="M12 9v4l2 2" /><path d="M9 2h6" /></> }
 ];
 
@@ -36,7 +38,7 @@ const TERMS = [
 function Tile({ t, style }) {
   return (
     <div className="rw-tile" style={style}>
-      <svg width="80" height="56" viewBox="0 0 80 56" aria-hidden="true">
+      <svg width="68" height="48" viewBox="0 0 80 56" aria-hidden="true">
         <polygon points="2,21 40,40 40,54 2,35" className="rw-tile-l" />
         <polygon points="78,21 40,40 40,54 78,35" className="rw-tile-r" />
         <polygon points="40,2 78,21 40,40 2,21" className="rw-tile-top" />
@@ -95,13 +97,14 @@ export default function RewardsPage({ me, registered, totalSlots, onBack }) {
       <div className="rw-body">
         <section className="rw-intro">
           <div className="rw-hero" aria-hidden="true">
-            {TILES.map((t) => <Tile key={t.t} t={t.t} style={{ left: t.x, top: t.y }} />)}
-            <NexxaBot className="rw-bot" />
+            {TILES.map((t) => <Tile key={t.t} t={t.t} style={t.style} />)}
+            <NexxaBot width={72} className="rw-bot" />
             <div className="rw-bot-shadow" />
           </div>
-          <h1 className="rw-title">Nhận cổ phiếu trị giá đến 100.000đ</h1>
-          <p className="rw-sub">Lọt Top 1.000 để nhận cổ phiếu VIP. Mỗi người bạn mời = 10 điểm.</p>
-          <a className="rw-terms-link" href="#rw-terms" onClick={() => setTermsOpen(true)}>Áp dụng điều khoản</a>
+          {/* <h1 className="rw-title">Nhận cổ phiếu trị giá đến 100.000đ</h1>
+          <p className="rw-sub">Lọt Top 1.000 để nhận cổ phiếu VIP</p>
+          <p className="rw-sub">Mỗi lượt mời bạn = 10 điểm.</p> */}
+          {/* <a className="rw-terms-link" href="#rw-terms" onClick={() => setTermsOpen(true)}>Áp dụng điều khoản</a> */}
         </section>
 
         <section className="rw-status" aria-label="Trạng thái của bạn">
@@ -138,7 +141,7 @@ export default function RewardsPage({ me, registered, totalSlots, onBack }) {
             <div className={`rw-tier${isVip ? ' is-me-vip' : ''}`}>
               <span className="rw-badge rw-badge-vip">VIP</span>
               <span className="rw-tier-amt">100.000đ</span>
-              <span className="rw-tier-note">Top {fmt(totalSlots)} · cổ phiếu VN30</span>
+              <span className="rw-tier-note">Top {fmt(totalSlots)} · cổ phiếu VIP</span>
               <span className="rw-tier-left">Còn {fmt(left)} / {fmt(totalSlots)}</span>
             </div>
             <div className={`rw-tier${isStd ? ' is-me-std' : ''}`}>

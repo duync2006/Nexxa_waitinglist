@@ -19,7 +19,11 @@ const priceSchema = new Schema(
     groupType: { type: String, enum: ['VIP', 'STANDARD', null], default: null },
     // Tên công ty do nguồn giá trả về. Frontend đọc field này để hiển thị thay vì
     // hardcode tên trong bundle, nên đây là nơi duy nhất quyết định tên hiện ra màn hình.
-    companyName: { type: String, default: null }
+    companyName: { type: String, default: null },
+    // Tên ngắn quen thuộc với người dùng (vd. "Vietcombank"). KHÔNG do refreshPrices ghi —
+    // nó đến từ file JSON qua server/scripts/updateFriendlyName.js, nên `npm run prices`
+    // không bao giờ xoá hay ghi đè field này.
+    companyShortName: { type: String, default: null }
   },
   { collection: 'prices', versionKey: false }
 );

@@ -60,7 +60,7 @@ export default function FeaturedStocks() {
                   <div key={s.t} className="featured-item" title={s.n ?? s.t}>
                     {s.pool === 'vip' && <span className="chip-tag">VIP</span>}
                     <span className="featured-t">{s.t}</span>
-                    <span className="featured-n">{s.n ?? ''}</span>
+                    <span className="featured-n">{s.shortName ?? ''}</span>
                     <span className="featured-p">
                       {typeof s.price === 'number' ? vnd(s.price) : '—'}
                     </span>

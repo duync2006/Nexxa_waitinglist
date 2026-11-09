@@ -20,6 +20,7 @@ export async function getCatalog() {
     return {
       t: r._id,
       n: r.companyName ?? null,
+      shortName: r.companyShortName ?? null,
       pool: groupType ? groupType.toLowerCase() : null,
       groupType,
       price: typeof r.price === 'number' ? r.price : null

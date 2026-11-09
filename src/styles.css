@@ -377,11 +377,11 @@ button:disabled { opacity: 0.6; cursor: not-allowed; }
    height CỐ ĐỊNH đúng 3 dòng, không phải min-height: tên ngắn như "FPT" chỉ chiếm 1 dòng,
    nếu để thẻ tự co thì thẻ cao thẻ thấp và dải trượt nhìn như răng cưa. */
 .featured-n {
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 600;
   color: var(--muted);
   line-height: 1.25;
-  height: 3.75em; /* 3 × 1.25 — khớp đúng ba dòng, đổi line-height phải đổi cả số này */
+  height: 1.2em; /* 3 × 1.25 — khớp đúng ba dòng, đổi line-height phải đổi cả số này */
   display: -webkit-box;
   -webkit-line-clamp: 3;
   line-clamp: 3;
@@ -636,36 +636,44 @@ button:disabled { opacity: 0.6; cursor: not-allowed; }
 .rw-nav { height: 56px; display: flex; align-items: center; justify-content: space-between; padding: 0 8px; }
 .rw-nav-btn { width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; border: 0; background: none; color: var(--ink); cursor: pointer; }
 .rw-nav-title { font-size: 16px; font-weight: 600; }
-.rw-body { flex: 1; display: flex; flex-direction: column; gap: 28px; padding: 4px 16px 24px; }
-.rw-intro { display: flex; flex-direction: column; gap: 10px; }
-.rw-hero { position: relative; height: 220px; margin-bottom: 10px; border-radius: 20px; overflow: hidden; background: color-mix(in srgb, var(--accent) 10%, var(--surface)); }
-.rw-tile { position: absolute; width: 80px; height: 56px; }
+.rw-body { flex: 1; display: flex; flex-direction: column; gap: 20px; padding: 0 16px 24px; }
+.rw-intro { display: flex; flex-direction: column; gap: 6px; }
+.rw-hero { position: relative; height: 140px; margin-bottom: 8px; border-radius: 18px; overflow: hidden; background: color-mix(in srgb, var(--accent) 10%, var(--surface)); }
+.rw-tile { position: absolute; width: 68px; height: 48px; }
 .rw-tile svg { display: block; }
-.rw-tile span { position: absolute; left: 0; right: 0; top: 13px; text-align: center; font-size: 15px; font-weight: 800; letter-spacing: 0.02em; color: var(--ink); transform: scaleY(0.72); }
+.rw-tile span { position: absolute; left: 0; right: 0; top: 10px; text-align: center; font-size: 13px; font-weight: 800; letter-spacing: 0.02em; color: var(--ink); transform: scaleY(0.72); }
 .rw-tile-top { fill: var(--surface); }
 .rw-tile-l { fill: var(--line); }
 .rw-tile-r { fill: var(--axis); }
-.rw-bot { position: absolute; left: 50%; top: 22px; margin-left: -42px; }
-.rw-bot-shadow { position: absolute; left: 50%; top: 150px; margin-left: -46px; width: 92px; height: 14px; border-radius: 50%; background: rgba(0, 0, 0, 0.14); }
-.rw-title { font-size: 30px; line-height: 1.12; font-weight: 700; letter-spacing: -0.025em; }
-.rw-sub { font-size: 16px; color: var(--ink-2); }
+/* Robot lơ lửng: bay lên thì bóng co nhỏ và nhạt đi, hạ xuống thì bóng giãn ra — cùng một
+   nhịp nên trông như có độ cao thật. Vị trí canh giữa dùng margin, để transform rảnh cho animation. */
+.rw-bot { position: absolute; left: 50%; top: 10px; margin-left: -36px; animation: rw-float 2.6s ease-in-out infinite; }
+.rw-bot-shadow { animation: rw-shadow 2.6s ease-in-out infinite; }
+@keyframes rw-float { 0%, 100% { transform: translateY(2px); } 50% { transform: translateY(-6px); } }
+@keyframes rw-shadow { 0%, 100% { transform: scaleX(1); opacity: 1; } 50% { transform: scaleX(0.78); opacity: 0.55; } }
+@media (prefers-reduced-motion: reduce) {
+  .rw-bot, .rw-bot-shadow { animation: none; }
+}
+.rw-bot-shadow { position: absolute; left: 50%; top: 113px; margin-left: -40px; width: 80px; height: 10px; border-radius: 50%; background: rgba(0, 0, 0, 0.14); }
+.rw-title { margin-bottom: 2px; font-size: 26px; line-height: 1.15; font-weight: 700; letter-spacing: -0.025em; }
+.rw-sub { font-size: 15px; line-height: 1.4; color: var(--ink-2); }
 .rw-terms-link { align-self: flex-start; min-height: 32px; display: inline-flex; align-items: center; font-size: 15px; color: var(--muted); text-decoration: none; }
-.rw-status { display: flex; flex-direction: column; gap: 14px; padding: 20px; border-radius: 20px; background: var(--surface); border: 1px solid var(--line); }
-.rw-status-eyebrow { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--muted); }
-.rw-status-title { font-size: 22px; line-height: 1.25; font-weight: 700; letter-spacing: -0.015em; }
-.rw-status-body { font-size: 15px; color: var(--ink-2); }
+.rw-status { display: flex; flex-direction: column; gap: 10px; padding: 16px; border-radius: 18px; background: var(--surface); border: 1px solid var(--line); }
+.rw-status-eyebrow { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); }
+.rw-status-title { font-size: 19px; line-height: 1.25; font-weight: 700; letter-spacing: -0.015em; }
+.rw-status-body { font-size: 14px; line-height: 1.4; color: var(--ink-2); }
 .rw-bar-wrap { display: flex; flex-direction: column; gap: 8px; }
 .rw-bar { height: 8px; border-radius: 4px; background: var(--bar-track); overflow: hidden; }
 .rw-bar div { height: 100%; min-width: 4px; border-radius: 4px; background: var(--accent); }
 .rw-bar-meta { display: flex; justify-content: space-between; font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
-.rw-link-btn { align-self: flex-start; min-height: 44px; padding: 0; border: 0; background: none; cursor: pointer; font-size: 17px; font-weight: 700; color: var(--good); text-decoration: underline; text-underline-offset: 4px; text-decoration-thickness: 2px; }
+.rw-link-btn { align-self: flex-start; min-height: 44px; padding: 0; border: 0; background: none; cursor: pointer; font-size: 17px; font-weight: 700; color: var(--good); text-decoration: underline; text-underline-offset: 4px; text-decoration-thickness: 2px; margin-top: -10px }
 .rw-sec { display: flex; flex-direction: column; gap: 12px; }
 .rw-h2 { font-size: 20px; font-weight: 700; letter-spacing: -0.01em; }
 .rw-tiers { display: flex; gap: 10px; }
 .rw-tier { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; gap: 10px; padding: 16px; border-radius: 18px; background: var(--surface); border: 1.5px solid var(--line); }
 .rw-tier.is-me-vip { border-color: var(--tag-line); }
 .rw-tier.is-me-std { border-color: var(--axis); }
-.rw-badge { align-self: flex-start; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 700; letter-spacing: 0.06em; }
+.rw-badge { align-self: flex-start; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 700; letter-spacing: 0.06em; margin-top: -6px; margin-bottom: -6px; text-transform: uppercase; white-space: nowrap; }
 .rw-badge-vip { background: var(--tag-bg); color: var(--tag-ink); }
 .rw-badge-std { background: var(--gift-neutral); color: var(--ink-2); }
 .rw-tier-amt { font-size: 24px; font-weight: 800; letter-spacing: -0.02em; }
@@ -682,7 +690,7 @@ button:disabled { opacity: 0.6; cursor: not-allowed; }
 .rw-acc { border-top: 1px solid var(--line); }
 .rw-acc-btn { width: 100%; min-height: 52px; display: flex; align-items: center; justify-content: space-between; padding: 0; border: 0; background: none; cursor: pointer; font-size: 15px; font-weight: 600; color: var(--ink); }
 .rw-acc-list { margin: 0 0 8px; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; font-size: 14px; color: var(--ink-2); }
-.rw-cta { position: sticky; bottom: 0; padding: 12px 16px 20px; background: var(--bg); border-top: 1px solid var(--line); }
+.rw-cta { position: sticky; bottom: 0; padding: 12px 20px 5px; background: var(--bg); border-top: 1px solid var(--line); }
 .rw-cta-btn { width: 100%; height: 54px; border: 0; border-radius: 999px; background: var(--accent); color: var(--accent-on); font-size: 17px; font-weight: 700; cursor: pointer; }
 
 .rw-board { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
@@ -706,8 +714,8 @@ button:disabled { opacity: 0.6; cursor: not-allowed; }
 .promo:active { transform: translateY(0); }
 .promo-text { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 10px; }
 .promo-eyebrow { font-size: 12px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--good); }
-.promo-title { font-size: 22px; line-height: 1.2; font-weight: 700; letter-spacing: -0.015em; text-wrap: balance; }
-.promo-tiers { display: flex; flex-wrap: wrap; gap: 6px; }
+.promo-title { font-size: 22px; line-height: 1.2; font-weight: 700; letter-spacing: -0.015em; }
+.promo-tiers { display: flex; flex-direction: column; flex-wrap: wrap; gap: 6px; }
 .promo-tier { padding: 4px 10px; border-radius: 999px; font-size: 13px; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .promo-tier b { margin-right: 4px; font-weight: 700; }
 .promo-tier-vip { background: var(--tag-bg); color: var(--tag-ink); border: 1px solid var(--tag-line); }
@@ -716,8 +724,8 @@ button:disabled { opacity: 0.6; cursor: not-allowed; }
 .promo-cta svg { transition: transform 0.15s ease; }
 .promo:hover .promo-cta svg { transform: translateX(3px); }
 .promo-art { position: relative; flex: none; width: 76px; display: flex; flex-direction: column; align-items: center; }
-.promo-bot { display: block; }
-.promo-shadow { width: 60px; height: 10px; margin-top: 4px; border-radius: 50%; background: rgba(0, 0, 0, 0.14); }
+.promo-bot { display: block; animation: rw-float 2.6s ease-in-out infinite; }
+.promo-shadow { width: 60px; height: 10px; margin-top: 4px; border-radius: 50%; background: rgba(0, 0, 0, 0.14); animation: rw-shadow 2.6s ease-in-out infinite; }
 @media (min-width: 720px) {
   .promo { padding: 28px 36px; gap: 32px; }
   .promo-title { font-size: 28px; }
@@ -727,5 +735,6 @@ button:disabled { opacity: 0.6; cursor: not-allowed; }
 }
 @media (prefers-reduced-motion: reduce) {
   .promo, .promo-cta svg { transition: none; }
+  .promo-bot, .promo-shadow { animation: none; }
   .promo:hover { transform: none; }
 }

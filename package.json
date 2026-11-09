@@ -13,6 +13,7 @@
     "migrate": "node --env-file-if-exists=.env server/scripts/migrate-json-to-mongo.js",
     "backfill": "node --env-file-if-exists=.env server/scripts/backfill-referrals.js",
     "prices": "node --env-file-if-exists=.env server/scripts/update-prices.js",
+    "prices:names": "node --env-file-if-exists=.env server/scripts/updateFriendlyName.js",
     "prices:demo": "cross-env PRICE_SOURCE=demo node --env-file=.env.test server/scripts/update-prices.js"
   },
   "dependencies": {

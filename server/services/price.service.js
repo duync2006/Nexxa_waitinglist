@@ -77,6 +77,8 @@ export async function warnIfBudgetInfeasible() {
 // lên cho caller (script) in ra — tuyệt đối không xoá dữ liệu đang có.
 export async function refreshPrices() {
   const tickers = tickersToFetch();
+  console.log("ticket: ", tickers)
+  console.log("tickers to fetch:", tickers.join(', '), `(${tickers.length} mã)`);
   const prices = await fetchPrices(tickers);
 
   const now = new Date();

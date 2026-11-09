@@ -75,6 +75,7 @@ export function CatalogProvider({ children }) {
 
 export function useCatalog() {
   const ctx = useContext(CatalogContext);
+  console.log("useCatalog ctx: ", ctx)
   if (!ctx) throw new Error('useCatalog phải nằm trong <CatalogProvider>.');
   return ctx;
 }
