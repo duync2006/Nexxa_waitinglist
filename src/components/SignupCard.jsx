@@ -129,7 +129,7 @@ export default function SignupCard({ me, onJoined, onReset, onOpenReserve, pendi
               id="wl-email"
               className="input"
               type="email"
-              placeholder="nexxa@email.com"
+              placeholder="nexxa@gmail.com"
               autoComplete="email"
               value={email}
               onChange={(e) => { setEmail(e.target.value); setError(''); }}
@@ -189,10 +189,9 @@ export default function SignupCard({ me, onJoined, onReset, onOpenReserve, pendi
 }
 
 function Result({ me, returning, onReset, onOpenReserve }) {
-  const { tierOfRank } = useCatalog();
+  const { tierOf } = useCatalog();
   const [copied, setCopied] = useState(false);
-  const myTier = tierOfRank(me.rank);
-  const invitesTo = (target) => Math.max(1, Math.ceil((me.rank - target) / 10));
+  const myTier = tierOf(me);
 
   const refUrl = `${window.location.origin}${import.meta.env.BASE_URL}r/${me.refCode}`;
   const refShown = refUrl.replace(/^https?:\/\//, '');
@@ -213,9 +212,10 @@ function Result({ me, returning, onReset, onOpenReserve }) {
   //   nextBody = 'và nhận cổ phiếu COPPER trị giá 40.000đ.';
   // }
 
-  // tierOfRank luôn trả về một bậc: top 1.000 hoặc sau top 1.000. Không còn
-  // trường hợp "không có quà" như bảng TIERS cũ.
-  const tier = { label: myTier.label, fg: myTier.fg, bg: myTier.bg };
+  // Pill nói rõ ĐƯỜNG VÀO, không chỉ bậc: hai nhóm VIP cùng quyền lợi nhưng người đăng ký
+  // sớm cần biết mình đã chắc suất, còn người Top cần biết mình đang giữ chỗ bằng điểm.
+  const pillLabel = me.early ? 'First 1.000 · VIP' : me.vip ? 'Top 1.000 · VIP' : myTier.label;
+  const tier = { label: pillLabel, fg: myTier.fg, bg: myTier.bg };
 
   async function copy() {
     try { await navigator.clipboard.writeText(refUrl); } catch { /* bỏ qua */ }
@@ -244,9 +244,10 @@ function Result({ me, returning, onReset, onOpenReserve }) {
       </div>
 
       <div className="rank-row">
+        {/* Người đăng ký sớm không có hạng đua: hiện thứ tự đăng ký thay vì hạng. */}
         <div className="stack-2">
-          <span className="muted-14">Vị trí của bạn trong waitlist</span>
-          <span className="rank-big">#{fmt(me.rank)}</span>
+          <span className="muted-14">{me.early ? 'Bạn là người đăng ký thứ' : 'Hạng của bạn trong cuộc đua Top 1.000'}</span>
+          <span className="rank-big">#{fmt(me.early ? me.joinIndex : me.rank)}</span>
         </div>
         <span className="tier-pill" style={{ background: tier.bg, color: tier.fg }}>{tier.label}</span>
       </div>
@@ -259,9 +260,16 @@ function Result({ me, returning, onReset, onOpenReserve }) {
 
 
       <div className="invite">
+        {/* Người đăng ký sớm đã chắc suất: không còn hạng để leo, chỉ mời bạn cùng nhận. */}
         <div className="stack-2">
-          <span className="invite-title">Mời bạn bè, leo hạng nhanh hơn</span>
-          <span className="muted-14">Mỗi lượt đăng ký qua link = <strong className="ink">+10 bậc</strong></span>
+          {me.early ? (
+            <span className="invite-title">Mời bạn bè cùng nhận cổ phiếu</span>
+          ) : (
+            <>
+              <span className="invite-title">Mời bạn bè, leo hạng nhanh hơn</span>
+              <span className="muted-14">Mỗi lượt đăng ký qua link = <strong className="ink">+10 điểm</strong></span>
+            </>
+          )}
         </div>
         <div className="row-wrap-8">
           <div className="ref-box" title={refUrl}>{refShown}</div>

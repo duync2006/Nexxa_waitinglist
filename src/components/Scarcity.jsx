@@ -1,59 +1,81 @@
 import { fmt } from '../lib/format.js';
-import { STANDARD_SLOTS } from '../../shared/catalog.js';
 
-// Khối khan hiếm đặt ngay dưới dòng giá trị ở hero. Trước đây đây là cái pill 13px màu xám
-// nằm cạnh nút đổi theme trên header — đúng con số mạnh nhất trang nhưng để ở chỗ yếu nhất,
-// và người đọc xong hero không hề nhìn thấy nó.
+// Khối khan hiếm ở hero: hai vòng cho hai đường vào VIP.
+//   First 1.000 — 1.000 người đăng ký đầu tiên, chắc chắn VIP.
+//   Top 1.000   — 1.000 người điểm cao nhất trong số đăng ký từ #1.001 trở đi.
+// Số suất còn lại do /api/stats tính sẵn (firstRemaining, topRemaining), component không
+// tự suy luật. Suất Top về 0 khi nhóm đua đủ 1.000 người — thứ hạng bên trong vẫn đổi theo điểm.
 //
-// `total` là số suất VIP (top 1.000 theo điểm). Hạng được xếp theo điểm chứ không theo thứ tự
-// đăng ký, nhưng về SỐ LƯỢNG thì top 1.000 đầy ngay khi có 1.000 người, nên chỉ cần `registered`
-// là suy ra được cả hai nhóm, không cần server trả thêm gì.
-export default function Scarcity({ registered, total, last24h }) {
-  const capacity = total + STANDARD_SLOTS;
-  const taken = Math.min(Math.max(0, registered), capacity);
-  const vipTaken = Math.min(taken, total);
-  const standardTaken = taken - vipTaken;
+// Mỗi vòng: vòng mảnh bên trong luôn đầy, cung dày bên ngoài dài bằng % suất CÒN LẠI
+// (bắt đầu ở 12 giờ, chạy theo chiều kim đồng hồ). Cung ngắn dần khi suất cạn — người xem
+// thấy "sắp hết" mà không cần đọc số.
 
-  // Bề rộng tối thiểu 2px: ngày đầu pct làm tròn ra 0% và thanh trông như hỏng, trong khi
-  // thực tế đã có người đăng ký.
-  const fillWidth = (n, of) => {
-    const pct = of ? (n / of) * 100 : 0;
-    return pct > 0 ? `max(2px, ${pct}%)` : 0;
-  };
+// Hệ toạ độ SVG 120×120. Cung ngoài r=54 nét 8 (phủ 50→58), vòng trong r=44 — khe ~5 đơn vị
+// giữa hai lớp là thứ tạo ra cảm giác "vòng lồng vòng" như mẫu.
+const ARC_R = 54;
+const INNER_R = 44;
 
-  const rows = [
-    { key: 'vip', label: 'VIP', hint: 'Top 1.000 theo điểm', slots: total, taken: vipTaken },
-    { key: 'std', label: 'Standard', hint: 'Từ hạng #1.001', slots: STANDARD_SLOTS, taken: standardTaken }
-  ];
+function Ring({ label, hint, slots, left, tone }) {
+  const remain = Math.min(slots, Math.max(0, left));
+  const raw = slots ? (remain / slots) * 100 : 0;
+  // Còn suất nhưng làm tròn ra gần 0 thì vẫn giữ một mẩu cung, nếu không vòng trông như đã hết.
+  const pct = remain > 0 ? Math.max(raw, 1.5) : 0;
 
   return (
-    <div className="scarcity">
-      <div className="scarcity-stack">
-        {rows.map((r) => (
-          <div key={r.key} className={`scarcity-row scarcity-seg-${r.key}`}>
-            <div className="scarcity-row-head">
-              <span className="scarcity-seg-label">{r.label}</span>
-              <span className="scarcity-row-hint">{r.hint}</span>
-              <span className="scarcity-row-left">
-                <b>Còn {fmt(r.slots - r.taken)}</b> / {fmt(r.slots)}
-              </span>
-            </div>
-            <div
-              className="bar scarcity-seg-bar"
-              role="progressbar"
-              aria-valuemin={0}
-              aria-valuemax={r.slots}
-              aria-valuenow={r.taken}
-              aria-label={`Suất ${r.label}: đã có ${fmt(r.taken)} trên ${fmt(r.slots)}`}
-            >
-              <div className="bar-fill" style={{ width: fillWidth(r.taken, r.slots) }} />
-            </div>
-          </div>
-        ))}
+    <figure
+      className={`ring ring-${tone}`}
+      role="progressbar"
+      aria-valuemin={0}
+      aria-valuemax={slots}
+      aria-valuenow={remain}
+      aria-label={`Suất ${label}: còn ${fmt(remain)} trên ${fmt(slots)}`}
+    >
+      <div className="ring-dial">
+        <svg viewBox="0 0 120 120" aria-hidden="true">
+          <circle className="ring-inner" cx="60" cy="60" r={INNER_R} />
+          {pct > 0 && (
+            <circle
+              className="ring-arc"
+              cx="60"
+              cy="60"
+              r={ARC_R}
+              pathLength="100"
+              style={{ strokeDasharray: `${pct} 100` }}
+            />
+          )}
+        </svg>
+        <div className="ring-value">
+          <b>{fmt(remain)}</b>
+          <span>/ {fmt(slots)}</span>
+        </div>
       </div>
-      {last24h > 0 && (
-        <p className="scarcity-rate">{fmt(last24h)} người đăng ký trong 24 giờ qua</p>
-      )}
+      <figcaption>
+        <span className="ring-label">{label}</span>
+        <span className="ring-hint">{hint}</span>
+      </figcaption>
+    </figure>
+  );
+}
+
+export default function Scarcity({ slots }) {
+  return (
+    <div className="scarcity">
+      <div className="scarcity-rings">
+        <Ring
+          label={`First ${fmt(slots.firstSlots)}`}
+          hint="Đăng ký sớm"
+          slots={slots.firstSlots}
+          left={slots.firstRemaining}
+          tone="first"
+        />
+        <Ring
+          label={`Top ${fmt(slots.topSlots)}`}
+          hint="Theo điểm mời"
+          slots={slots.topSlots}
+          left={slots.topRemaining}
+          tone="top"
+        />
+      </div>
     </div>
   );
 }

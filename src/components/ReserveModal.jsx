@@ -177,7 +177,11 @@ export default function ReserveModal({ open, onClose, me, onGoSignup, initialBas
               <span className="muted-13">
                 {/* Không liệt kê tên nhóm ở đây: chuỗi dài bị cắt trên mobile, mà các
                     nhóm được phép đã hiện thành từng mục ngay bên dưới. */}
-                {opts.preview ? 'Ngân sách dự kiến' : `Ngân sách hạng #${opts.rank ?? '—'}`}
+                {opts.preview
+                  ? 'Ngân sách dự kiến'
+                  : opts.early
+                    ? 'Ngân sách First 1.000'
+                    : `Ngân sách hạng #${opts.rank ?? '—'}`}
               </span>
               <span className="reserve-budget-num">{vnd(total)} / {vnd(budget)}</span>
             </div>
@@ -226,6 +230,7 @@ export default function ReserveModal({ open, onClose, me, onGoSignup, initialBas
           {visiblePools.map((pool) => {
             // Mã phổ biến xếp trước, phần còn lại nối sau; cả danh sách nằm trong một vùng cuộn.
             const { popular = [], rest = [] } = poolStocks[pool.key] ?? {};
+            {/* console.log('poolStocks[pool.key]', pool.key, poolStocks[pool.key]); */}
             const stocks = [...popular, ...rest];
             return (
               <section key={pool.key} className="pool" aria-labelledby={`pool-${pool.key}`}>
@@ -254,7 +259,7 @@ export default function ReserveModal({ open, onClose, me, onGoSignup, initialBas
                         }}
                       >
                         <span className="chip-t">{s.t}</span>
-                        <span className="chip-n">{s.n}</span>
+                        <span className="chip-n">{s.shortName}</span>
                         <span className={`chip-p${typeof price === 'number' ? '' : ' chip-p-none'}`}>
                           {typeof price === 'number' ? vnd(price) : '—'}
                         </span>

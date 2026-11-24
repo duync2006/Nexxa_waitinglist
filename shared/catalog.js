@@ -2,10 +2,19 @@
 // Trước đây server import thẳng src/lib/data.js (phụ thuộc ngược vào source frontend) và
 // TOTAL_SLOTS được khai báo hai nơi độc lập — sửa một nơi là lệch. Giờ cả hai cùng đọc từ đây.
 
+// Hai đường vào VIP, mỗi đường 1.000 suất, KHÔNG chồng lên nhau:
+//   1. FIRST_SLOTS — 1.000 người đăng ký đầu tiên (joinIndex 1..1.000), chắc chắn VIP bất kể điểm.
+//   2. TOTAL_SLOTS — Top 1.000 theo điểm, xếp RIÊNG trong nhóm đăng ký từ người #1.001 trở đi
+//      ("nhóm đua"). Người thuộc First 1.000 không chiếm chỗ trong cuộc đua này.
+// Tổng cộng tối đa 2.000 suất VIP. Tên TOTAL_SLOTS giữ nguyên vì /api/catalog và /api/stats
+// đã trả về key `totalSlots` — đổi tên là vỡ client cũ.
+export const FIRST_SLOTS = 1000;
 export const TOTAL_SLOTS = 1000;
-// Số suất nhóm Standard (hạng #1.001 trở đi). Chỉ dùng để HIỂN THỊ thanh khan hiếm; server
-// chưa chặn đăng ký khi vượt tổng TOTAL_SLOTS + STANDARD_SLOTS.
+// Số suất nhóm Standard. Chỉ dùng để hiển thị; server chưa chặn đăng ký khi vượt quá.
 export const STANDARD_SLOTS = 9000;
+
+// Người đăng ký sớm: joinIndex tăng đều 1 theo thứ tự đăng ký (bộ đếm Counter 'users').
+export const isEarlyJoin = (joinIndex) => joinIndex <= FIRST_SLOTS;
 
 const S = (s) => s.split(';').map((p) => { const [t, n] = p.split('|'); return { t, n }; });
 
@@ -46,12 +55,14 @@ export const NAME_OF_TICKER = Object.fromEntries(
   Object.values(RESERVABLE).flat().map((s) => [s.t, s.n])
 );
 
-// Quyền chọn cổ phiếu theo hạng trong waitlist. Thay cho bảng TIERS cũ
-// (GOLD/SILVER/COPPER với ba mức tiền khác nhau).
+// Quyền chọn cổ phiếu. First 1.000 và Top 1.000 cùng hưởng bậc 'top' — quyền lợi giống
+// nhau, chỉ khác đường vào; còn lại là 'rest'.
 export const ENTITLEMENTS = [
-  { key: 'top', label: 'Top 1.000', budget: 100000, pools: ['vip', 'standard'] },
-  { key: 'rest', label: 'Sau top 1.000', budget: 50000, pools: ['standard'] }
+  { key: 'top', label: 'VIP', budget: 100000, pools: ['vip', 'standard'] },
+  { key: 'rest', label: 'Tiêu chuẩn', budget: 50000, pools: ['standard'] }
 ];
 
-export const entitlementOfRank = (rank) =>
-  rank <= TOTAL_SLOTS ? ENTITLEMENTS[0] : ENTITLEMENTS[1];
+// early: thuộc First 1.000. rank: hạng trong nhóm đua (null với người đăng ký sớm).
+export const isVip = ({ early, rank }) => Boolean(early) || (rank != null && rank <= TOTAL_SLOTS);
+
+export const entitlementOf = (standing) => (isVip(standing) ? ENTITLEMENTS[0] : ENTITLEMENTS[1]);

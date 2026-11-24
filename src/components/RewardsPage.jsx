@@ -24,7 +24,7 @@ const WAYS = [
     icon: <><circle cx="9" cy="8" r="4" /><path d="M2 21c0-4 3-6 7-6s7 2 7 6" /><path d="M19 8v6M16 11h6" /></> },
   { title: 'Mua 1, tặng 1 mỗi tháng', body: 'Mua 1 cổ phiếu bất kỳ trong tháng, nhận thêm 1 cổ phiếu', value: '+1 CP',
     icon: <><path d="M17 2l4 4-4 4" /><path d="M3 11V9a3 3 0 0 1 3-3h15" /><path d="M7 22l-4-4 4-4" /><path d="M21 13v2a3 3 0 0 1-3 3H3" /></> },
-  { title: 'Đăng ký sớm', body: 'Top 1000 người nhận cổ phiếu VIP', value: 'VIP',
+  { title: 'Đăng ký sớm', body: '1.000 người đăng ký đầu tiên chắc chắn nhận cổ phiếu VIP', value: 'VIP',
     icon: <><circle cx="12" cy="13" r="8" /><path d="M12 9v4l2 2" /><path d="M9 2h6" /></> }
 ];
 
@@ -48,7 +48,8 @@ function Tile({ t, style }) {
   );
 }
 
-export default function RewardsPage({ me, registered, totalSlots, onBack }) {
+export default function RewardsPage({ me, slots, onBack }) {
+  const { firstSlots, firstRemaining, topSlots, topRemaining } = slots;
   const [termsOpen, setTermsOpen] = useState(false);
   // Bảng xếp hạng phân trang, mỗi trang 7 người (server quyết định pageSize). Giữ trang cũ
   // trên màn hình trong lúc tải trang mới để bảng không nháy trắng.
@@ -65,24 +66,34 @@ export default function RewardsPage({ me, registered, totalSlots, onBack }) {
     return () => { alive = false; };
   }, [page]);
   const pageSize = board?.pageSize ?? 7;
-  const myPage = me ? Math.ceil(me.rank / pageSize) : null;
-  const meOffPage = !!me && !!board && myPage !== board.page;
+  // Bảng xếp hạng chỉ gồm nhóm đua (đăng ký từ #1.001). Người thuộc First 1.000 không có
+  // hạng đua (rank null) nên không có "trang của tôi" để nhảy tới hay ghim.
+  const inRace = !!me && me.rank != null;
+  const myPage = inRace ? Math.ceil(me.rank / pageSize) : null;
+  const meOffPage = inRace && !!board && myPage !== board.page;
   const points = me ? (me.invites || 0) * POINTS_PER_INVITE : 0;
   const cutoff = board?.cutoff ?? null;
-  const left = Math.max(0, totalSlots - registered);
-  const pct = totalSlots ? Math.min(100, (registered / totalSlots) * 100) : 0;
-  const isVip = !!me && me.rank <= totalSlots;
+  const firstTaken = firstSlots - firstRemaining;
+  const firstPct = firstSlots ? Math.min(100, (firstTaken / firstSlots) * 100) : 0;
+  const isEarly = !!me && !!me.early;
+  const isVip = !!me && !!me.vip;
   const isStd = !!me && !isVip;
 
-  // Thẻ trạng thái: ba biến thể theo người xem (chưa đăng ký / VIP / tiêu chuẩn).
-  const status = isVip
-    ? { eyebrow: `Hạng #${fmt(me.rank)} · ${fmt(points)} điểm`, title: 'Bạn nằm trong nhóm VIP — cổ phiếu 100.000đ',
-        body: 'Mời thêm bạn bè để giữ vững vị trí.', cta: 'Mời thêm bạn bè' }
-    : isStd
-      ? { eyebrow: `Hạng #${fmt(me.rank)} · ${fmt(points)} điểm`, title: 'Bạn đang ở hạng Tiêu chuẩn — cổ phiếu 50.000đ',
-          body: 'Mời bạn bè để leo lên Top 1.000 và nhận cổ phiếu VIP.', cta: 'Mời bạn bè' }
-      : { eyebrow: 'Suất VIP đang mở', title: `Còn ${fmt(left)} suất VIP — đăng ký để giữ chỗ`,
-          body: 'Hoàn tất đăng ký và eKYC để nhận cổ phiếu trị giá đến 100.000đ.', cta: 'Đăng ký ngay' };
+  // Thẻ trạng thái: bốn biến thể theo người xem (chưa đăng ký / First 1.000 / Top 1.000 / tiêu chuẩn).
+  const status = isEarly
+    ? { eyebrow: `Người đăng ký thứ #${fmt(me.joinIndex)}`, title: 'Bạn đã chắc suất VIP — cổ phiếu 100.000đ',
+        body: `Bạn thuộc ${fmt(firstSlots)} người đăng ký đầu tiên. Mời bạn bè để họ cùng nhận cổ phiếu.`, cta: 'Mời bạn bè' }
+    : isVip
+      ? { eyebrow: `Hạng #${fmt(me.rank)} · ${fmt(points)} điểm`, title: `Bạn đang trong Top ${fmt(topSlots)} — cổ phiếu VIP 100.000đ`,
+          body: 'Mời thêm bạn bè để giữ vững vị trí.', cta: 'Mời thêm bạn bè' }
+      : isStd
+        ? { eyebrow: `Hạng #${fmt(me.rank)} · ${fmt(points)} điểm`, title: 'Bạn đang ở hạng Tiêu chuẩn — cổ phiếu 50.000đ',
+            body: `Mời bạn bè để leo lên Top ${fmt(topSlots)} và nhận cổ phiếu VIP.`, cta: 'Mời bạn bè' }
+        : firstRemaining > 0
+          ? { eyebrow: 'Suất VIP đang mở', title: `Còn ${fmt(firstRemaining)} suất First ${fmt(firstSlots)} — đăng ký để chắc VIP`,
+              body: 'Hoàn tất đăng ký và eKYC để nhận cổ phiếu trị giá đến 100.000đ.', cta: 'Đăng ký ngay' }
+          : { eyebrow: 'Suất VIP đang mở', title: `Đã hết suất First ${fmt(firstSlots)} — vào Top ${fmt(topSlots)} để nhận VIP`,
+              body: 'Đăng ký rồi mời bạn bè để tích điểm, 1.000 người điểm cao nhất nhận cổ phiếu VIP.', cta: 'Đăng ký ngay' };
 
   return (
     <div className="rw">
@@ -113,7 +124,7 @@ export default function RewardsPage({ me, registered, totalSlots, onBack }) {
             <span>{status.eyebrow}</span>
           </div>
           <p className="rw-status-title">{status.title}</p>
-          {me && cutoff !== null && (
+          {inRace && cutoff !== null && (
             <div className="rw-bar-wrap">
               <div className="rw-bar"><div style={{ width: `${cutoff ? Math.min(100, (points / cutoff) * 100) : 100}%` }} /></div>
               <div className="rw-bar-meta">
@@ -124,10 +135,10 @@ export default function RewardsPage({ me, registered, totalSlots, onBack }) {
           )}
           {!me && (
             <div className="rw-bar-wrap">
-              <div className="rw-bar"><div style={{ width: `${pct}%` }} /></div>
+              <div className="rw-bar"><div style={{ width: `${firstPct}%` }} /></div>
               <div className="rw-bar-meta">
-                <span>{fmt(registered)} / {fmt(totalSlots)} đã nhận</span>
-                <span>Còn {fmt(left)}</span>
+                <span>First {fmt(firstSlots)}: {fmt(firstTaken)} / {fmt(firstSlots)} đã nhận</span>
+                <span>Còn {fmt(firstRemaining)}</span>
               </div>
             </div>
           )}
@@ -138,16 +149,23 @@ export default function RewardsPage({ me, registered, totalSlots, onBack }) {
         <section className="rw-sec">
           <h2 className="rw-h2">Hai hạng thưởng</h2>
           <div className="rw-tiers">
+            {/* Một bậc VIP, hai đường vào — mỗi đường một dòng số suất riêng. */}
             <div className={`rw-tier${isVip ? ' is-me-vip' : ''}`}>
               <span className="rw-badge rw-badge-vip">VIP</span>
               <span className="rw-tier-amt">100.000đ</span>
-              <span className="rw-tier-note">Top {fmt(totalSlots)} · cổ phiếu VIP</span>
-              <span className="rw-tier-left">Còn {fmt(left)} / {fmt(totalSlots)}</span>
+              <div className="rw-tier-route">
+                <span className="rw-tier-note">First {fmt(firstSlots)} · đăng ký sớm</span>
+                <span className="rw-tier-left">Còn {fmt(firstRemaining)} / {fmt(firstSlots)}</span>
+              </div>
+              <div className="rw-tier-route">
+                <span className="rw-tier-note">Top {fmt(topSlots)} · theo điểm mời</span>
+                <span className="rw-tier-left">Còn {fmt(topRemaining)} / {fmt(topSlots)}</span>
+              </div>
             </div>
             <div className={`rw-tier${isStd ? ' is-me-std' : ''}`}>
               <span className="rw-badge rw-badge-std">TIÊU CHUẨN</span>
               <span className="rw-tier-amt">50.000đ</span>
-              <span className="rw-tier-note">Từ hạng #{fmt(totalSlots + 1)} · cổ phiếu tiêu chuẩn</span>
+              <span className="rw-tier-note">Ngoài First {fmt(firstSlots)} và Top {fmt(topSlots)} · cổ phiếu tiêu chuẩn</span>
             </div>
           </div>
         </section>
@@ -171,7 +189,12 @@ export default function RewardsPage({ me, registered, totalSlots, onBack }) {
         </section>
 
         <section className="rw-sec">
-          <h2 className="rw-h2">Bảng xếp hạng</h2>
+          <h2 className="rw-h2">Bảng xếp hạng Top {fmt(topSlots)}</h2>
+          <span className="rw-board-note">
+            {isEarly
+              ? `Bạn đã chắc suất VIP nên không cần đua. Bảng chỉ xếp người đăng ký từ #${fmt(firstSlots + 1)}.`
+              : `Chỉ xếp người đăng ký từ #${fmt(firstSlots + 1)}. ${fmt(firstSlots)} người đầu tiên đã chắc suất VIP.`}
+          </span>
           {board && board.top.length > 0 ? (
             <ul className={`rw-board${loading ? ' is-loading' : ''}`} aria-busy={loading}>
               {board.top.map((r) => {
@@ -201,12 +224,12 @@ export default function RewardsPage({ me, registered, totalSlots, onBack }) {
               <button type="button" className="rw-pager-btn" disabled={page <= 1 || loading} onClick={() => setPage((p) => p - 1)} aria-label="Trang trước">‹</button>
               <span className="rw-pager-info">Trang {fmt(board.page)} / {fmt(board.totalPages)}</span>
               <button type="button" className="rw-pager-btn" disabled={page >= board.totalPages || loading} onClick={() => setPage((p) => p + 1)} aria-label="Trang sau">›</button>
-              {me && myPage !== page && (
+              {inRace && myPage !== page && (
                 <button type="button" className="rw-pager-me" onClick={() => setPage(myPage)}>Xem hạng của tôi</button>
               )}
             </div>
           )}
-          {cutoff !== null && <span className="rw-board-note">Ngưỡng vào Top {fmt(totalSlots)} hiện tại: {fmt(cutoff)} điểm</span>}
+          {cutoff !== null && <span className="rw-board-note">Ngưỡng vào Top {fmt(topSlots)} hiện tại: {fmt(cutoff)} điểm</span>}
         </section>
 
         <section id="rw-terms" className="rw-acc">

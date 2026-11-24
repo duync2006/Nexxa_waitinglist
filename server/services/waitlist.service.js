@@ -1,5 +1,5 @@
 import { BOOST, LEADERBOARD_PAGE_SIZE, POINTS_PER_INVITE } from '../config/constants.js';
-import { TOTAL_SLOTS } from '../../shared/catalog.js';
+import { FIRST_SLOTS, TOTAL_SLOTS, isEarlyJoin, isVip } from '../../shared/catalog.js';
 import { User, nextJoinIndex } from '../models/index.js';
 import { randomRefCode } from '../utils/codes.js';
 import { maskEmail } from '../utils/mask.js';
@@ -36,16 +36,21 @@ export const pointsOf = (invites) => (invites || 0) * POINTS_PER_INVITE;
 // Chạy trên index { invites: -1, joinIndex: 1 }. Phải khớp với rankOf bên dưới.
 export const RANK_ORDER = { invites: -1, joinIndex: 1 };
 
-// Bảng xếp hạng công khai, phân trang. Chỉ trả email đã che.
-// cutoff = điểm của người đứng hạng TOTAL_SLOTS (ngưỡng VIP); null khi chưa đủ người.
+// Nhóm đua Top 1.000: chỉ người đăng ký từ #FIRST_SLOTS+1. First 1.000 đã chắc VIP nên
+// đứng ngoài cuộc đua — họ không chiếm hạng, không đẩy ngưỡng điểm lên.
+export const RACE_FILTER = { joinIndex: { $gt: FIRST_SLOTS } };
+const EARLY_FILTER = { joinIndex: { $lte: FIRST_SLOTS } };
+
+// Bảng xếp hạng công khai của nhóm đua, phân trang. Chỉ trả email đã che.
+// cutoff = điểm của người đứng hạng TOTAL_SLOTS trong nhóm đua (ngưỡng VIP); null khi chưa đủ người.
 // page vượt quá số trang thì trả top rỗng chứ không báo lỗi.
 export async function getLeaderboard(page = 1, pageSize = LEADERBOARD_PAGE_SIZE) {
   const p = Number.isInteger(page) && page > 0 ? page : 1;
   const skip = (p - 1) * pageSize;
   const [rows, total, edge] = await Promise.all([
-    User.find({}).sort(RANK_ORDER).skip(skip).limit(pageSize).select('email invites').lean(),
-    countUsers(),
-    User.find({}).sort(RANK_ORDER).skip(TOTAL_SLOTS - 1).limit(1).select('invites').lean()
+    User.find(RACE_FILTER).sort(RANK_ORDER).skip(skip).limit(pageSize).select('email invites').lean(),
+    User.countDocuments(RACE_FILTER),
+    User.find(RACE_FILTER).sort(RANK_ORDER).skip(TOTAL_SLOTS - 1).limit(1).select('invites').lean()
   ]);
   return {
     top: rows.map((u, i) => ({ rank: skip + i + 1, masked: maskEmail(u.email), points: pointsOf(u.invites) })),
@@ -62,25 +67,38 @@ export async function getStats() {
   // "37 người đăng ký hôm qua" mới nói lên bao giờ hết.
   // recent đi ké luôn request này: trang đã gọi /api/stats mỗi 30 giây rồi, thêm một
   // endpoint riêng cho ticker là nhân đôi số request mà không được gì.
-  const [registered, last24h, recent] = await Promise.all([
+  const [registered, early, last24h, recent] = await Promise.all([
     countUsers(),
+    User.countDocuments(EARLY_FILTER),
     countRecent(),
     listRecentJoins()
   ]);
+  const race = registered - early;
+  const firstRemaining = Math.max(0, FIRST_SLOTS - early);
+  // Suất Top còn trống = 1.000 trừ số người đã vào nhóm đua. Đủ 1.000 người thì về 0,
+  // dù thứ hạng bên trong vẫn còn đổi theo điểm.
+  const topRemaining = Math.max(0, TOTAL_SLOTS - race);
   return {
     registered,
+    firstSlots: FIRST_SLOTS,
+    firstRemaining,
     totalSlots: TOTAL_SLOTS,
-    remaining: Math.max(0, TOTAL_SLOTS - registered),
+    topRemaining,
+    // Tổng suất VIP còn mở ở cả hai đường.
+    remaining: firstRemaining + topRemaining,
     last24h,
     recent
   };
 }
 
-// Hạng = số người đứng trên + 1. Đứng trên nghĩa là nhiều điểm (lượt mời) hơn, hoặc bằng
-// điểm nhưng đăng ký trước. Phải khớp đúng RANK_ORDER của bảng xếp hạng.
+// Hạng trong nhóm đua = số người đứng trên + 1. Đứng trên nghĩa là nhiều điểm (lượt mời)
+// hơn, hoặc bằng điểm nhưng đăng ký trước. Phải khớp đúng RANK_ORDER của bảng xếp hạng.
+// Người thuộc First 1.000 không có hạng đua -> null.
 export async function rankOf(user) {
+  if (isEarlyJoin(user.joinIndex)) return null;
   const invites = user.invites || 0;
   const ahead = await User.countDocuments({
+    ...RACE_FILTER,
     $or: [
       { invites: { $gt: invites } },
       { invites, joinIndex: { $lt: user.joinIndex } }
@@ -90,10 +108,19 @@ export async function rankOf(user) {
 }
 
 // Hình dạng này frontend đang đọc trực tiếp — đổi key là vỡ giao diện.
+//   early     — thuộc First 1.000
+//   joinIndex — thứ tự đăng ký, hiển thị cho người đăng ký sớm ("người thứ #123")
+//   rank      — hạng trong nhóm đua; null với người đăng ký sớm
+//   vip       — server tự quyết, frontend không phải suy lại luật
 export async function toProfile(user) {
+  const early = isEarlyJoin(user.joinIndex);
+  const rank = await rankOf(user);
   return {
     email: user.email,
-    rank: await rankOf(user),
+    early,
+    joinIndex: user.joinIndex,
+    rank,
+    vip: isVip({ early, rank }),
     registered: await countUsers(),
     refCode: user.refCode,
     invites: user.invites

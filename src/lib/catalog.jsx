@@ -46,9 +46,11 @@ function shape(raw, ready) {
     // Tra nhóm của một mã, thay cho việc mỗi component tự dựng lại map từ catalog.
     poolOfTicker: Object.fromEntries(stocks.map((s) => [s.t, s.pool])),
     stocksOfPools: (keys) => stocks.filter((s) => keys.includes(s.pool)),
-    // Cùng luật với entitlementOfRank ở server: trong số suất thì bậc đầu, ngoài thì bậc
-    // sau. Luôn trả về một bậc — không còn trường hợp "ngoài top 1.000 thì không có quà".
-    tierOfRank: (rank) => (rank <= totalSlots ? tierViews[0] : tierViews[1] ?? tierViews[0])
+    // Bậc quà của một profile. Server đã quyết `vip` (First 1.000 hoặc Top 1.000 nhóm đua)
+    // nên ở đây chỉ đọc cờ, không suy lại luật. Luôn trả về một bậc.
+    tierOf: (me) => (me?.vip ? tierViews[0] : tierViews[1] ?? tierViews[0]),
+    // Chỉ còn TierList (đang tắt) dùng: so hạng trong nhóm đua với số suất Top.
+    tierOfRank: (rank) => (rank != null && rank <= totalSlots ? tierViews[0] : tierViews[1] ?? tierViews[0])
   };
 }
 
@@ -75,7 +77,7 @@ export function CatalogProvider({ children }) {
 
 export function useCatalog() {
   const ctx = useContext(CatalogContext);
-  console.log("useCatalog ctx: ", ctx)
+  // console.log("useCatalog ctx: ", ctx)
   if (!ctx) throw new Error('useCatalog phải nằm trong <CatalogProvider>.');
   return ctx;
 }

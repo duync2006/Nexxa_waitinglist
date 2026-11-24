@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from './lib/api.js';
-import { useCatalog } from './lib/catalog.jsx';
-import { fmt } from './lib/format.js';
+import { FIRST_SLOTS, TOTAL_SLOTS } from '../shared/catalog.js';
 import Logo from './components/Logo.jsx';
 import msbMark from './assets/msb-mark.png';
 import SignupCard from './components/SignupCard.jsx';
@@ -29,9 +28,14 @@ function loadTheme() {
 }
 
 export default function App() {
-  const { totalSlots } = useCatalog();
-  const [registered, setRegistered] = useState(0);
-  const [last24h, setLast24h] = useState(0);
+  // Suất VIP còn lại ở hai đường vào, server tính sẵn. Khung hình đầu (chưa có stats) coi
+  // như còn nguyên để vòng không nháy về 0.
+  const [slots, setSlots] = useState({
+    firstSlots: FIRST_SLOTS,
+    firstRemaining: FIRST_SLOTS,
+    topSlots: TOTAL_SLOTS,
+    topRemaining: TOTAL_SLOTS
+  });
   // Người đăng ký gần nhất, email đã che sẵn ở server. Đi ké /api/stats nên tự làm mới
   // theo cùng nhịp 30 giây, không thêm request nào.
   const [recent, setRecent] = useState([]);
@@ -56,8 +60,12 @@ export default function App() {
       api.stats()
         .then((s) => {
           if (!alive) return;
-          setRegistered(s.registered);
-          setLast24h(s.last24h ?? 0);
+          setSlots((prev) => ({
+            firstSlots: s.firstSlots ?? prev.firstSlots,
+            firstRemaining: s.firstRemaining ?? prev.firstRemaining,
+            topSlots: s.totalSlots ?? prev.topSlots,
+            topRemaining: s.topRemaining ?? prev.topRemaining
+          }));
           setRecent(s.recent ?? []);
         })
         .catch(() => {});
@@ -82,7 +90,6 @@ export default function App() {
 
   const handleJoined = async (profile) => {
     setMe(profile);
-    setRegistered(profile.registered);
 
     // Đã chọn cổ phiếu trước khi đăng ký thì ghi nhận luôn, không bắt mở lại modal chọn lần
     // hai. Lỗi ở đây nuốt im: đăng ký đã thành công rồi, giỏ vẫn còn trong modal để thử lại.
@@ -107,8 +114,7 @@ export default function App() {
     return (
       <RewardsPage
         me={me}
-        registered={registered}
-        totalSlots={totalSlots}
+        slots={slots}
         onBack={() => { window.location.hash = ''; }}
       />
     );
@@ -156,8 +162,9 @@ export default function App() {
             {/* Hai dòng là MỘT ý: ai được (điều kiện) rồi được gì (phần thưởng). Bọc chung
                 để khoảng cách giữa chúng hẹp hơn khoảng cách với h1 và khối khan hiếm —
                 để rời nhau cùng cỡ chữ thì đọc thành hai câu không liên quan. */}
+            <Scarcity slots={slots} />
             <div className="lead-group">
-              <p className="lead-cond">{fmt(totalSlots)} người đăng ký NEXXA đầu tiên</p>
+              {/* <p className="lead-cond">{fmt(totalSlots)} người đăng ký NEXXA đầu tiên</p> */}
               <p className="lead">Nhận cổ phiếu VIP — lên tới 10 mã</p>
             </div>
             <FeaturedStocks />
@@ -169,7 +176,7 @@ export default function App() {
             onOpenReserve={() => setReserveOpen(true)}
             pendingBasket={pendingBasket}
           />
-        <Scarcity registered={registered} total={totalSlots} last24h={last24h} />
+        {/* <Scarcity slots={slots} /> */}
         </section>
       </main>
 

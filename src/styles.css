@@ -147,7 +147,7 @@ button:disabled { opacity: 0.6; cursor: not-allowed; }
 
 /* Modal Reserve */
 .modal-backdrop { position: fixed; inset: 0; z-index: 50; display: flex; align-items: center; justify-content: center; padding: 10px; background: rgba(8,12,20,0.55); }
-.modal { width: 100%; max-width: 880px; max-height: calc(100vh - 32px); overflow-y: auto; display: flex; flex-direction: column; gap: 20px; padding: clamp(18px, 3vw, 28px); border-radius: 20px; background: var(--surface); border: 1px solid var(--line); box-shadow: 0 24px 64px rgba(0,0,0,0.25); }
+.modal { width: 100%; max-width: 1080px; max-height: calc(100vh - 32px); overflow-y: auto; display: flex; flex-direction: column; gap: 20px; padding: clamp(18px, 3vw, 28px); border-radius: 20px; background: var(--surface); border: 1px solid var(--line); box-shadow: 0 24px 64px rgba(0,0,0,0.25); }
 .modal-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-top: -12px }
 .icon-btn { width: 36px; height: 36px; flex-shrink: 0; border: 1px solid var(--line); border-radius: 999px; background: var(--bg); color: var(--ink); font-size: 20px; line-height: 1; cursor: pointer; }
 .reserve-pools { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 8px; }
@@ -160,7 +160,10 @@ button:disabled { opacity: 0.6; cursor: not-allowed; }
 /* Thanh cuộn native bị ẩn hẳn và thay bằng .pool-bar do ReserveModal tự vẽ: trên mobile thanh
    native luôn là overlay tự mờ đi khi ngừng cuộn, ::-webkit-scrollbar không can thiệp được. */
 .pool-scroll { position: relative; }
-.pool-chips { display: flex; flex-wrap: wrap; align-content: flex-start; column-gap: 16px; row-gap: 8px; max-height: 140px; padding-right: 20px; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; -ms-overflow-style: none; }
+/* Lưới cố định: 4 chip một hàng trên web, 2 chip trên mobile (≤560px, xem media query bên dưới).
+   Mỗi chip lấp đầy ô lưới nên các hàng thẳng cột; chip dùng bố cục xếp chồng (mã + giá ở hàng
+   trên, tên ở hàng dưới) vì ô chỉ rộng ~190px — nhét cả ba vào một hàng thì tên bị bóp. */
+.pool-chips { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); align-content: start; column-gap: 16px; row-gap: 8px; max-height: 140px; padding-right: 20px; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; -ms-overflow-style: none; }
 .pool-chips::-webkit-scrollbar { display: none; }
 .pool-bar { position: absolute; top: 0; right: 0; width: 8px; height: 100%; border-radius: 4px; background: var(--bg); pointer-events: none; }
 .pool-bar-thumb { width: 8px; border-radius: 4px; background: var(--muted-2); cursor: grab; pointer-events: auto; touch-action: none; transition: background 0.15s ease; }
@@ -191,11 +194,16 @@ button:disabled { opacity: 0.6; cursor: not-allowed; }
    284px, chip rộng nhất 264px), tên chỉ còn ~150px nên 20/50 mã vẫn tràn quá 2 dòng.
    Cho tên xuống hẳn một hàng riêng trong chip để nó dùng trọn bề ngang — mã và giá ở
    hàng trên, tên 2 dòng ở hàng dưới. */
+.pool-chips .chip { flex-wrap: wrap; row-gap: 2px; width: 100%; }
+.pool-chips .chip-t { order: 1; }
+.pool-chips .chip-p { order: 2; margin-left: auto; }
+.pool-chips .chip-n { order: 3; flex-basis: 100%; max-width: 100%; }
+/* Web: vùng cuộn cao hơn để thấy nhiều hàng cùng lúc (mobile giữ 140px vì màn hình thấp). */
+@media (min-width: 561px) {
+  .pool-chips { max-height: 240px; }
+}
 @media (max-width: 560px) {
-  .pool-chips .chip { flex-wrap: wrap; row-gap: 2px; }
-  .pool-chips .chip-t { order: 1; }
-  .pool-chips .chip-p { order: 2; margin-left: auto; }
-  .pool-chips .chip-n { order: 3; flex-basis: 100%; max-width: 100%; }
+  .pool-chips { grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 10px; }
 }
 /* Giá là huy hiệu vàng nằm giữa cạnh phải chip, cùng kiểu viền-nền với .chip-tag của VIP.
    Vẫn nằm trong luồng flex nên .chip tự canh giữa theo chiều dọc và tự nới rộng vừa đủ —
@@ -243,7 +251,7 @@ button:disabled { opacity: 0.6; cursor: not-allowed; }
 .dot { width: 8px; height: 8px; border-radius: 50%; background: #16A34A; }
 
 /* Hero */
-.hero { padding-top: clamp(24px, 5vw, 72px); padding-bottom: 48px; display: flex; flex-wrap: wrap; gap: clamp(32px, 5vw, 64px); align-items: flex-start; }
+.hero { padding-top: clamp(16px, 2.5vw, 28px); padding-bottom: 48px; display: flex; flex-wrap: wrap; gap: clamp(32px, 5vw, 64px); align-items: flex-start; }
 .hero-main { flex: 1 1 100%; min-width: 0; display: flex; flex-direction: column; gap: 10px; }
 .hero-copy { display: flex; flex-direction: column; align-items: center; gap: 16px; text-align: center; }
 .hero h1 { font-size: clamp(36px, 5vw, 60px); line-height: 1.08; font-weight: 800;  }
@@ -414,25 +422,34 @@ button:disabled { opacity: 0.6; cursor: not-allowed; }
    giá trị rồi tới số suất còn lại, đọc liền một mạch. */
 /* margin-top thêm vào gap của .hero-copy: khối khan hiếm là một đơn vị riêng, cách cụm chữ
    bên trên rộng hơn khoảng cách giữa hai dòng trong cụm đó. */
-.scarcity { display: flex; flex-direction: column; align-items: center; gap: 12px; width: 100%; max-width: 58ch; margin-top: 2px; margin-inline: auto; margin-bottom: -40px; }
-/* Hai thanh riêng xếp chồng: VIP và Standard mỗi nhóm một hàng, một màu, số liệu riêng.
-   Vàng của VIP lấy từ ENTITLEMENT_STYLE.top.bar (#D69A00) — vàng là dấu hiệu riêng của VIP
-   trên toàn trang nên không dùng cho Standard. */
-.scarcity-stack { display: flex; flex-direction: column; gap: 14px; width: 100%; max-width: 340px; }
-.scarcity-row { display: flex; flex-direction: column; gap: 6px; }
-.scarcity-row-head { display: flex; align-items: baseline; gap: 8px; }
-.scarcity-row-hint { font-size: 12px; color: var(--muted); }
-.scarcity-row-left { margin-left: auto; font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
-.scarcity-row-left b { font-size: 15px; font-weight: 700; color: var(--ink); }
-.scarcity-seg-label { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
-/* Chấm màu đứng trước nhãn để nhãn khớp với màu thanh bên dưới */
-.scarcity-seg-label::before { content: ''; flex: none; width: 8px; height: 8px; border-radius: 50%; }
-.scarcity-seg-bar { height: 8px; border-radius: 4px; }
-.scarcity-row .bar-fill { border-radius: 4px; }
-.scarcity-seg-vip .scarcity-seg-bar { background: rgba(214, 154, 0, 0.22); }
-.scarcity-seg-vip .bar-fill, .scarcity-seg-vip .scarcity-seg-label::before { background: #D69A00; }
-.scarcity-seg-std .bar-fill, .scarcity-seg-std .scarcity-seg-label::before { background: var(--accent); }
-.scarcity-rate { font-size: 14px; color: var(--muted); }
+/* Khối nằm giữa h1 và .lead-group nên không còn margin âm — margin âm cũ kéo .lead đè lên vòng. */
+.scarcity { display: flex; flex-direction: column; align-items: center; gap: 8px; width: 100%; max-width: 58ch; margin-inline: auto; }
+/* Hai vòng đứng cạnh nhau: hai đường vào VIP, mỗi đường một màu.
+   First 1.000 mang vàng VIP (ENTITLEMENT_STYLE.top.bar #D69A00) — suất đã chắc chắn;
+   Top 1.000 mang --accent — suất phải đua bằng điểm mời. */
+.scarcity-rings { display: flex; justify-content: center; gap: clamp(24px, 20vw, 50px); width: 100%; }
+.ring { --ring-tone: var(--accent); display: flex; flex-direction: column; align-items: center; gap: 6px; margin: 0; }
+.ring-first { --ring-tone: #D69A00; }
+.ring-dial { position: relative; width: clamp(80px, 22vw, 96px); aspect-ratio: 1; }
+.ring-dial svg { display: block; width: 100%; height: 100%; overflow: visible; }
+/* Vòng trong luôn đầy — mốc cố định để mắt so độ dài cung bên ngoài. */
+.ring-inner { fill: none; stroke: var(--ink); stroke-width: 1.5; opacity: 0.55; }
+/* Xoay -90° để cung bắt đầu ở 12 giờ; đầu cung cắt vuông (butt) như mẫu. */
+.ring-arc { fill: none; stroke: var(--ring-tone); stroke-width: 8; stroke-linecap: butt; transform: rotate(-90deg); transform-origin: 60px 60px; transition: stroke-dasharray 0.6s ease; animation: ring-draw 1.1s cubic-bezier(0.22, 1, 0.36, 1) both; }
+/* Một chuyển động duy nhất của khối: cung "vẽ" ra từ 12 giờ khi trang tải. */
+@keyframes ring-draw { from { stroke-dasharray: 0 100; } }
+.ring-value { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; font-variant-numeric: tabular-nums; line-height: 1; }
+.ring-value b { font-size: clamp(16px, 4.6vw, 19px); font-weight: 800; letter-spacing: -0.02em; color: var(--ink); }
+.ring-value span { font-size: 10px; font-weight: 500; color: var(--muted); }
+.ring figcaption { display: flex; flex-direction: column; align-items: center; gap: 1px; text-align: center; }
+.ring-label { display: flex; align-items: center; gap: 5px; font-size: 13px; font-weight: 700; color: var(--ink); }
+/* Chấm màu trước nhãn để nhãn khớp với màu cung phía trên */
+.ring-label::before { content: ''; flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--ring-tone); }
+.ring-hint { font-size: 11px; color: var(--muted); }
+.scarcity-rate { font-size: 13px; color: var(--muted); }
+@media (prefers-reduced-motion: reduce) {
+  .ring-arc { animation: none; transition: none; }
+}
 
 .bar { height: 6px; border-radius: 3px; background: var(--bar-track); overflow: hidden; }
 .bar-fill { height: 100%; border-radius: 3px; transition: width 0.4s ease; }
@@ -679,6 +696,8 @@ button:disabled { opacity: 0.6; cursor: not-allowed; }
 .rw-tier-amt { font-size: 24px; font-weight: 800; letter-spacing: -0.02em; }
 .rw-tier-note { font-size: 13px; color: var(--ink-2); }
 .rw-tier-left { font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; }
+/* Một đường vào VIP = tên đường + số suất còn, đi liền nhau trong thẻ */
+.rw-tier-route { display: flex; flex-direction: column; gap: 2px; }
 .rw-ways { list-style: none; margin: 0; padding: 0; }
 .rw-way { display: flex; align-items: center; gap: 14px; padding: 12px 0; border-bottom: 1px solid var(--line); }
 .rw-way:last-child { border-bottom: 0; }

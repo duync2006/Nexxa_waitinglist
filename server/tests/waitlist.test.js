@@ -4,6 +4,7 @@ import request from 'supertest';
 import { createApp } from '../app.js';
 import { MAX_ATTEMPTS } from '../config/constants.js';
 import { Otp, User } from '../models/index.js';
+import { FIRST_SLOTS } from '../../shared/catalog.js';
 import { joinViaApi, resetDb, setupDb, teardownDb } from './helpers/db.js';
 
 const app = createApp();
@@ -20,7 +21,15 @@ describe('GET /api/stats', () => {
 
     assert.equal(res.status, 200);
     const { recent, ...counts } = res.body;
-    assert.deepEqual(counts, { registered: 1, totalSlots: 1000, remaining: 999, last24h: 1 });
+    assert.deepEqual(counts, {
+      registered: 1,
+      firstSlots: 1000,
+      firstRemaining: 999,
+      totalSlots: 1000,
+      topRemaining: 1000,
+      remaining: 1999,
+      last24h: 1
+    });
     assert.equal(recent.length, 1);
   });
 
@@ -65,21 +74,36 @@ describe('GET /api/stats', () => {
     assert.equal(res.body.last24h, 1);
   });
 
-  it('remaining không âm khi đã vượt quá tổng số suất', async () => {
-    // Nhét thẳng 1001 user vào DB cho nhanh, không qua API
-    await User.insertMany(
-      Array.from({ length: 1001 }, (_, i) => ({
+  const fill = (n) =>
+    User.insertMany(
+      Array.from({ length: n }, (_, i) => ({
         email: `u${i}@test.local`,
-        refCode: `CODE${String(i).padStart(3, '0')}`,
+        refCode: `CODE${String(i).padStart(4, '0')}`,
         joinIndex: i + 1,
         score: i + 1,
         invites: 0
       }))
     );
 
+  it('First 1.000 đầy trước, rồi mới tới suất Top', async () => {
+    await fill(1200);
+
     const res = await request(app).post('/api/stats');
 
-    assert.equal(res.body.registered, 1001);
+    assert.equal(res.body.firstRemaining, 0);
+    assert.equal(res.body.topRemaining, 800);
+    assert.equal(res.body.remaining, 800);
+  });
+
+  it('remaining không âm khi đã vượt quá tổng số suất VIP', async () => {
+    // Nhét thẳng 2001 user vào DB cho nhanh, không qua API
+    await fill(2001);
+
+    const res = await request(app).post('/api/stats');
+
+    assert.equal(res.body.registered, 2001);
+    assert.equal(res.body.firstRemaining, 0);
+    assert.equal(res.body.topRemaining, 0);
     assert.equal(res.body.remaining, 0);
   });
 });
@@ -163,9 +187,16 @@ describe('POST /api/waitlist/verify', () => {
     const res = await joinViaApi(request, app, 'a@test.local');
 
     assert.equal(res.status, 200);
-    assert.deepEqual(Object.keys(res.body).sort(), ['email', 'invites', 'rank', 'refCode', 'registered'].sort());
+    assert.deepEqual(
+      Object.keys(res.body).sort(),
+      ['early', 'email', 'invites', 'joinIndex', 'rank', 'refCode', 'registered', 'vip'].sort()
+    );
     assert.equal(res.body.email, 'a@test.local');
-    assert.equal(res.body.rank, 1);
+    // Người đầu tiên thuộc First 1.000: chắc VIP, không có hạng đua.
+    assert.equal(res.body.early, true);
+    assert.equal(res.body.joinIndex, 1);
+    assert.equal(res.body.rank, null);
+    assert.equal(res.body.vip, true);
     assert.equal(res.body.invites, 0);
     assert.equal(res.body.refCode.length, 6);
     assert.equal(await Otp.countDocuments({ email: 'a@test.local' }), 0);
@@ -180,7 +211,7 @@ describe('POST /api/waitlist/verify', () => {
     assert.equal(res.body.error, 'Email này đã tham gia waitlist.');
     assert.equal(res.body.alreadyRegistered, true);
     assert.equal(res.body.profile.email, 'a@test.local');
-    assert.equal(res.body.profile.rank, 1);
+    assert.equal(res.body.profile.joinIndex, 1);
     assert.equal(await User.countDocuments({ email: 'a@test.local' }), 1);
   });
 
@@ -243,17 +274,19 @@ describe('POST /api/waitlist/check', () => {
 });
 
 describe('POST /api/leaderboard', () => {
+  // Bảng xếp hạng chỉ gồm nhóm đua, nên user mẫu bắt đầu từ joinIndex FIRST_SLOTS + 1.
+  const R = FIRST_SLOTS;
   const seed = (n, invitesOf = () => 0) =>
     User.insertMany(Array.from({ length: n }, (_, i) => ({
       email: `user${i + 1}@test.local`, refCode: `LB${String(i + 1).padStart(4, '0')}`,
-      joinIndex: i + 1, score: i + 1, invites: invitesOf(i + 1)
+      joinIndex: R + i + 1, score: R + i + 1, invites: invitesOf(i + 1)
     })));
 
   it('xếp theo điểm, bằng điểm thì ai vào trước đứng trên; email được che', async () => {
     await User.insertMany([
-      { email: 'anhnguyen@test.local', refCode: 'AAA001', joinIndex: 1, score: 1, invites: 0 },
-      { email: 'binhtran@test.local', refCode: 'BBB001', joinIndex: 2, score: -28, invites: 3 },
-      { email: 'cuongle@test.local', refCode: 'CCC001', joinIndex: 3, score: -27, invites: 3 }
+      { email: 'anhnguyen@test.local', refCode: 'AAA001', joinIndex: R + 1, score: R + 1, invites: 0 },
+      { email: 'binhtran@test.local', refCode: 'BBB001', joinIndex: R + 2, score: R - 28, invites: 3 },
+      { email: 'cuongle@test.local', refCode: 'CCC001', joinIndex: R + 3, score: R - 27, invites: 3 }
     ]);
 
     const res = await request(app).post('/api/leaderboard');
@@ -294,5 +327,19 @@ describe('POST /api/leaderboard', () => {
     const res = await request(app).post('/api/waitlist/check').send({ email: 'user4@test.local' });
 
     assert.equal(res.body.profile.rank, 1);
+  });
+
+  it('người thuộc First 1.000 không nằm trong bảng và không đẩy ngưỡng điểm', async () => {
+    // Người đăng ký sớm có điểm rất cao vẫn đứng ngoài cuộc đua.
+    await User.create({ email: 'som@test.local', refCode: 'SOM001', joinIndex: 1, score: 1, invites: 50 });
+    await seed(2);
+
+    const res = await request(app).post('/api/leaderboard');
+    const som = await request(app).post('/api/waitlist/check').send({ email: 'som@test.local' });
+
+    assert.equal(res.body.total, 2);
+    assert.ok(!res.body.top.some((r) => r.points === 500));
+    assert.equal(som.body.profile.rank, null);
+    assert.equal(som.body.profile.vip, true);
   });
 });

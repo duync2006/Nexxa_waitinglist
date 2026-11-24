@@ -1,7 +1,7 @@
 import { env } from '../../config/env.js';
 import { connectDb, disconnectDb } from '../../db/connect.js';
 import { User, Otp, Counter, Price } from '../../models/index.js';
-import { RESERVABLE, groupTypeOfTicker } from '../../../shared/catalog.js';
+import { FIRST_SLOTS, RESERVABLE, groupTypeOfTicker } from '../../../shared/catalog.js';
 
 // CHỐT CHẶN: test xoá sạch collection sau mỗi ca, nên tuyệt đối không được trỏ vào DB thật.
 // Chỉ chấp nhận database có tên kết thúc bằng _test.
@@ -47,6 +47,12 @@ export async function seedPrices(overrides = {}, { base = 20000, skip = [] } = {
       companyName: `Công ty ${t}`
     }));
   await Price.insertMany(rows);
+}
+
+// Đẩy bộ đếm joinIndex qua mốc First 1.000: người đăng ký qua API sau lệnh này rơi vào
+// nhóm đua Top 1.000 (có hạng theo điểm) thay vì nhóm đăng ký sớm (rank null).
+export async function startRaceJoins() {
+  await Counter.updateOne({ _id: 'users' }, { $set: { seq: FIRST_SLOTS } }, { upsert: true });
 }
 
 // Đưa một email qua trọn vòng request-otp → verify, trả về profile.

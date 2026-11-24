@@ -30,32 +30,37 @@ mà điều hướng trình duyệt luôn gửi GET, nên route này bắt buộ
 
 | Method | Path | Mô tả |
 |---|---|---|
-| POST | `/api/stats` | body `{}` → `{ registered, totalSlots, remaining }` |
+| POST | `/api/stats` | body `{}` → `{ registered, firstSlots, firstRemaining, totalSlots, topRemaining, remaining, last24h, recent }`. `remaining` = tổng suất VIP còn mở ở cả hai đường |
 | POST | `/api/waitlist/check` | body `{ email }` → `{ exists: false }` hoặc `{ exists: true, profile }` — frontend gọi trước khi gửi OTP |
 | POST | `/api/waitlist/request-otp` | body `{ email, ref? }` → gửi OTP 6 số (hết hạn 10 phút, gửi lại sau 60s) |
 | POST | `/api/waitlist/verify` | body `{ email, otp }` → profile (tối đa 5 lần sai). Email đã đăng ký → 409 kèm `alreadyRegistered` và profile hiện tại |
-| POST | `/api/reserve/options` | body `{ email? }` → `{ rank, budget, pools, locked, preview, selected, prices }`. Email rỗng → bản xem thử (`preview: true`) |
+| POST | `/api/reserve/options` | body `{ email? }` → `{ rank, early, budget, pools, locked, preview, selected, prices }`. Email rỗng → bản xem thử (`preview: true`) |
 | POST | `/api/reserve` | body `{ email, tickers }` → `{ ok, tickers, totalValue, budget }`, ghi đè lựa chọn cũ |
 | GET | `/r/:code` | Link mời ngắn, chuyển hướng về `/?ref=CODE`. **Giữ GET** — xem đoạn trên |
 
 Có sẵn Postman collection: `docs/nexxa-waitlist.postman_collection.json`.
 
-`profile` = `{ email, rank, registered, refCode, invites }`.
+`profile` = `{ email, early, joinIndex, rank, vip, registered, refCode, invites }`.
+`rank` là hạng trong nhóm đua, `null` với người thuộc First 1.000.
 
-**Xếp hạng:** `score = joinIndex - 10 × invites`, score càng nhỏ hạng càng cao, bằng điểm thì ai
-đăng ký trước đứng trên. `joinIndex` tăng đều 1 mỗi người đăng ký, nên mỗi lượt mời thành công
-(trừ 10 điểm) tương đương vượt qua 10 người không mời ai — lưu ý đây là trừ **điểm**, số **hạng**
-leo được thực tế tuỳ vào có bao nhiêu người nằm trong khoảng điểm đó.
+**Hai đường vào VIP (không chồng nhau, tối đa 2.000 suất):**
+
+1. **First 1.000** — người có `joinIndex` 1..1.000 (1.000 người đăng ký đầu tiên) chắc chắn VIP,
+   bất kể điểm. Họ đứng ngoài bảng xếp hạng.
+2. **Top 1.000** — xếp riêng trong **nhóm đua** (`joinIndex > 1.000`): điểm (`invites × 10`) cao
+   trước, bằng điểm thì ai đăng ký trước đứng trên. Hạng 1..1.000 của nhóm đua được VIP.
+
+Bảng xếp hạng (`/api/leaderboard`) và ngưỡng `cutoff` chỉ tính nhóm đua.
 
 ## Luật chọn cổ phiếu Reserve
 
-| Hạng (theo `score`) | Nhóm được chọn | Ngân sách |
+| Nhóm | Nhóm được chọn | Ngân sách |
 |---|---|---|
-| Top 1.000 | VIP (VN30) + Standard | 100.000đ |
-| Từ hạng 1.001 | chỉ Standard | 50.000đ |
+| First 1.000 hoặc Top 1.000 nhóm đua | VIP (VN30) + Standard | 100.000đ |
+| Còn lại | chỉ Standard | 50.000đ |
 
-Luật nằm ở `shared/catalog.js` (`ENTITLEMENTS`, `entitlementOfRank`) để frontend và server dùng
-đúng một bảng. Bảng `TIERS` cũ (GOLD/SILVER/COPPER) đã bị bỏ.
+Luật nằm ở `shared/catalog.js` (`FIRST_SLOTS`, `TOTAL_SLOTS`, `ENTITLEMENTS`, `isVip`,
+`entitlementOf`) để frontend và server dùng đúng một bảng.
 
 **Chốt ở lần Reserve đầu tiên.** Lần Reserve đầu ghi `lockedRank`, `budget`, `allowedPools`,
 `lockedPrices` và `totalValue` vào `user.reservation`. Hạng trôi về sau không làm người dùng mất

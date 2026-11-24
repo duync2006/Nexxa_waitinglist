@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import request from 'supertest';
 import { createApp } from '../app.js';
 import { Price, User } from '../models/index.js';
-import { RESERVABLE, TOTAL_SLOTS, groupTypeOfTicker } from '../../shared/catalog.js';
+import { FIRST_SLOTS, RESERVABLE, TOTAL_SLOTS, groupTypeOfTicker } from '../../shared/catalog.js';
 import { checkBudgetFeasibility, getPriceTable, refreshPrices } from '../services/price.service.js';
 import { resetDb, seedPrices, setupDb, teardownDb } from './helpers/db.js';
 
@@ -18,7 +18,9 @@ beforeEach(async () => {
 
 // Tạo user trực tiếp trong DB: đi qua API thì 1.000 user mất vài phút, mà ở đây chỉ cần
 // invites và joinIndex đúng để rankOf tính ra hạng mong muốn.
-async function makeUsers(count, { startIndex = 1, invites = 0 } = {}) {
+// Mặc định tạo trong nhóm đua (joinIndex > FIRST_SLOTS) vì đó là nhóm có hạng theo điểm.
+const RACE_START = FIRST_SLOTS + 1;
+async function makeUsers(count, { startIndex = RACE_START, invites = 0 } = {}) {
   const docs = [];
   for (let i = 0; i < count; i++) {
     const n = startIndex + i;
@@ -38,10 +40,10 @@ async function makeUsers(count, { startIndex = 1, invites = 0 } = {}) {
   return docs;
 }
 
-// Tạo đúng `rank - 1` người đứng trên rồi trả về email của người ở hạng `rank`.
+// Tạo đúng `rank - 1` người đứng trên trong nhóm đua rồi trả về email của người ở hạng `rank`.
 async function userAtRank(rank) {
   if (rank > 1) await makeUsers(rank - 1);
-  const [me] = await makeUsers(1, { startIndex: rank });
+  const [me] = await makeUsers(1, { startIndex: RACE_START + rank - 1 });
   return me.email;
 }
 
@@ -78,6 +80,38 @@ describe('POST /api/reserve/options', () => {
 
     assert.equal(res.body.prices.VCB, undefined, 'rò giá mã VIP cho người không được chọn');
     assert.equal(typeof res.body.prices.PNJ, 'number');
+  });
+
+  it('người thuộc First 1.000 chắc VIP dù 0 điểm và bị cả nghìn người vượt điểm', async () => {
+    const [early] = await makeUsers(1, { startIndex: FIRST_SLOTS }); // người đăng ký thứ 1.000
+    await makeUsers(1500, { invites: 5 });
+
+    const res = await options(early.email);
+
+    assert.equal(res.body.early, true);
+    assert.equal(res.body.rank, null);
+    assert.equal(res.body.budget, 100000);
+    assert.deepEqual(res.body.pools, ['vip', 'standard']);
+  });
+
+  it(`người đăng ký thứ ${FIRST_SLOTS + 1} không có suất sớm, xét theo hạng đua`, async () => {
+    const [late] = await makeUsers(1, { startIndex: FIRST_SLOTS + 1 });
+
+    const res = await options(late.email);
+
+    assert.equal(res.body.early, false);
+    assert.equal(res.body.rank, 1);
+    assert.equal(res.body.budget, 100000);
+  });
+
+  it('First 1.000 không chiếm chỗ trong Top 1.000 của nhóm đua', async () => {
+    await makeUsers(FIRST_SLOTS, { startIndex: 1, invites: 9 }); // đủ First 1.000, điểm cao
+    const email = await userAtRank(TOTAL_SLOTS);
+
+    const res = await options(email);
+
+    assert.equal(res.body.rank, TOTAL_SLOTS);
+    assert.equal(res.body.budget, 100000);
   });
 
   it('email rỗng thì trả bản xem thử với mức cao nhất', async () => {

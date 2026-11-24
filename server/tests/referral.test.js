@@ -4,7 +4,7 @@ import request from 'supertest';
 import { createApp } from '../app.js';
 import { BOOST } from '../config/constants.js';
 import { User } from '../models/index.js';
-import { joinViaApi, resetDb, setupDb, teardownDb } from './helpers/db.js';
+import { joinViaApi, resetDb, setupDb, startRaceJoins, teardownDb } from './helpers/db.js';
 
 const app = createApp();
 
@@ -37,13 +37,15 @@ describe('Cộng điểm cho người mời', () => {
   });
 
   it('người mời vượt lên trên những người đăng ký trước mình', async () => {
+    // Cả nhóm vào sau First 1.000 để có hạng trong nhóm đua.
+    await startRaceJoins();
     // u1 đăng ký đầu tiên VÀ mời được 1 người  -> 10 điểm
     const u1 = await joinViaApi(request, app, 'u1@test.local');
     await joinViaApi(request, app, 'cua-u1@test.local', u1.body.refCode);
     // u2, u3 đăng ký, không mời ai            -> 0 điểm
     for (const n of [2, 3]) await joinViaApi(request, app, `u${n}@test.local`);
 
-    const late = await joinViaApi(request, app, 'late@test.local'); // joinIndex 5, 0 điểm
+    const late = await joinViaApi(request, app, 'late@test.local'); // người thứ 5 của nhóm đua, 0 điểm
     assert.equal(late.body.rank, 5); // sau u1 (10 điểm), rồi cua-u1, u2, u3 (0 điểm, vào trước)
 
     await joinViaApi(request, app, 'moi@test.local', late.body.refCode);

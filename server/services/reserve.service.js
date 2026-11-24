@@ -42,6 +42,7 @@ export async function getOptions(email) {
 
   return {
     rank: entitlement.rank,
+    early: entitlement.early,
     budget: entitlement.budget,
     pools: entitlement.pools,
     locked: entitlement.locked,
