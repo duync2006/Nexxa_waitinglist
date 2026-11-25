@@ -34,7 +34,10 @@ export default function App() {
     firstSlots: FIRST_SLOTS,
     firstRemaining: FIRST_SLOTS,
     topSlots: TOTAL_SLOTS,
-    topRemaining: TOTAL_SLOTS
+    topRemaining: TOTAL_SLOTS,
+    topCutoff: null,
+    topStart: null,
+    topDeadline: null
   });
   // Người đăng ký gần nhất, email đã che sẵn ở server. Đi ké /api/stats nên tự làm mới
   // theo cùng nhịp 30 giây, không thêm request nào.
@@ -67,7 +70,10 @@ export default function App() {
             firstSlots: s.firstSlots ?? prev.firstSlots,
             firstRemaining: s.firstRemaining ?? prev.firstRemaining,
             topSlots: s.totalSlots ?? prev.topSlots,
-            topRemaining: s.topRemaining ?? prev.topRemaining
+            topRemaining: s.topRemaining ?? prev.topRemaining,
+            topCutoff: s.topCutoff ?? null,
+            topStart: s.topStart ?? null,
+            topDeadline: s.topDeadline ?? null
           }));
           setRecent(s.recent ?? []);
         })

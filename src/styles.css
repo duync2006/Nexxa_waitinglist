@@ -758,3 +758,10 @@ button:disabled { opacity: 0.6; cursor: not-allowed; }
   .promo-bot, .promo-shadow { animation: none; }
   .promo:hover { transform: none; }
 }
+
+/* Hai tab bảng Top / First, huy hiệu First trên bảng Top, chữ giữa vòng Top khi hết suất */
+.rw-tabs { display: flex; gap: 6px; }
+.rw-tab { flex: 1; min-height: 40px; padding: 0 8px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); color: var(--muted); font-size: 13px; font-weight: 600; cursor: pointer; }
+.rw-tab.is-on { background: var(--tag-bg); color: var(--tag-ink); border-color: transparent; }
+.rw-first-tag { margin-left: 8px; padding: 1px 8px; border-radius: 999px; background: var(--tag-bg); color: var(--tag-ink); font-size: 11px; font-weight: 700; vertical-align: middle; }
+.ring-value .ring-center-main { font-size: clamp(12px, 3.4vw, 14px); text-align: center; padding: 0 14px; line-height: 1.15; }

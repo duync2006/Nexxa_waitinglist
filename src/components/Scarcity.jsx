@@ -1,4 +1,5 @@
 import { fmt } from '../lib/format.js';
+import { useCountdown, countdownText } from '../lib/useCountdown.js';
 
 // Khối khan hiếm ở hero: hai vòng cho hai đường vào VIP.
 //   First 1.000 — 1.000 người đăng ký đầu tiên, chắc chắn VIP.
@@ -15,11 +16,13 @@ import { fmt } from '../lib/format.js';
 const ARC_R = 54;
 const INNER_R = 44;
 
-function Ring({ label, hint, slots, left, tone }) {
+// Ring có hai chế độ. Mặc định: giữa vòng là số suất còn lại. Truyền `center` (vòng Top khi hết
+// suất): giữa vòng là ngưỡng điểm + dòng phụ, cung theo `fraction` (0..1) thay cho % suất.
+function Ring({ label, hint, slots, left, tone, center, fraction }) {
   const remain = Math.min(slots, Math.max(0, left));
-  const raw = slots ? (remain / slots) * 100 : 0;
+  const raw = center ? Math.min(1, Math.max(0, fraction)) * 100 : slots ? (remain / slots) * 100 : 0;
   // Còn suất nhưng làm tròn ra gần 0 thì vẫn giữ một mẩu cung, nếu không vòng trông như đã hết.
-  const pct = remain > 0 ? Math.max(raw, 1.5) : 0;
+  const pct = center ? raw : remain > 0 ? Math.max(raw, 1.5) : 0;
 
   return (
     <figure
@@ -28,7 +31,7 @@ function Ring({ label, hint, slots, left, tone }) {
       aria-valuemin={0}
       aria-valuemax={slots}
       aria-valuenow={remain}
-      aria-label={`Suất ${label}: còn ${fmt(remain)} trên ${fmt(slots)}`}
+      aria-label={center ? `${label}: ${center.main} ${center.sub || ''}`.trim() : `Suất ${label}: còn ${fmt(remain)} trên ${fmt(slots)}`}
     >
       <div className="ring-dial">
         <svg viewBox="0 0 120 120" aria-hidden="true">
@@ -45,8 +48,17 @@ function Ring({ label, hint, slots, left, tone }) {
           )}
         </svg>
         <div className="ring-value">
-          <b>{fmt(remain)}</b>
-          <span>/ {fmt(slots)}</span>
+          {center ? (
+            <>
+              <b className="ring-center-main">{center.main}</b>
+              {center.sub && <span>{center.sub}</span>}
+            </>
+          ) : (
+            <>
+              <b>{fmt(remain)}</b>
+              <span>/ {fmt(slots)}</span>
+            </>
+          )}
         </div>
       </div>
       <figcaption>
@@ -57,7 +69,22 @@ function Ring({ label, hint, slots, left, tone }) {
   );
 }
 
+// Vòng Top khi hết suất: hiện ngưỡng điểm và đếm ngược tới deadline. Cung = phần thời gian còn
+// lại (deadline − now) / (deadline − topStart); thiếu topStart thì đầy; sau deadline thì rỗng.
+function useTopClosing(slots) {
+  const cd = useCountdown(slots.topDeadline);
+  if (slots.topRemaining > 0) return null;
+  const cutoff = slots.topCutoff;
+  const main = cutoff === 0 ? 'Mời 1 bạn để vào Top' : cutoff != null ? `≥ ${fmt(cutoff)} đ` : '';
+  if (!cd) return { center: { main, sub: '' }, fraction: 1 };
+  const start = slots.topStart ? Date.parse(slots.topStart) : NaN;
+  const total = cd.target - start;
+  const fraction = cd.ended ? 0 : Number.isFinite(total) && total > 0 ? cd.msLeft / total : 1;
+  return { center: { main, sub: countdownText(cd) }, fraction };
+}
+
 export default function Scarcity({ slots }) {
+  const closing = useTopClosing(slots);
   return (
     <div className="scarcity">
       <div className="scarcity-rings">
@@ -74,6 +101,8 @@ export default function Scarcity({ slots }) {
           slots={slots.topSlots}
           left={slots.topRemaining}
           tone="top"
+          center={closing?.center}
+          fraction={closing?.fraction}
         />
       </div>
     </div>

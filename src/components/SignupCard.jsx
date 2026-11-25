@@ -205,7 +205,10 @@ function Result({ me, returning, onReset, onOpenReserve }) {
 
   // Pill nói rõ ĐƯỜNG VÀO, không chỉ bậc: hai nhóm VIP cùng quyền lợi nhưng người đăng ký
   // sớm cần biết mình đã chắc suất, còn người Top cần biết mình đang giữ chỗ bằng điểm.
-  const pillLabel = me.early ? 'First 1.000 · VIP' : me.vip ? 'Top 1.000 · VIP' : myTier.label;
+  const pillLabel = me.early && me.inTop ? 'First + Top · VIP'
+    : me.early ? 'First 1.000 · VIP'
+    : me.inTop ? 'Top 1.000 · VIP'
+    : 'Tiêu chuẩn';
   const tier = { label: pillLabel, fg: myTier.fg, bg: myTier.bg };
 
   async function copy() {
@@ -235,32 +238,34 @@ function Result({ me, returning, onReset, onOpenReserve }) {
       </div>
 
       <div className="rank-row">
-        {/* Người đăng ký sớm không có hạng đua: hiện thứ tự đăng ký thay vì hạng. */}
+        {/* Người First hiện cả thứ tự đăng ký lẫn hạng Top; ai cũng có hạng Top vì xếp trên toàn bộ user. */}
         <div className="stack-2">
-          <span className="muted-14">{me.early ? 'Bạn là người đăng ký thứ' : 'Hạng của bạn trong cuộc đua Top 1.000'}</span>
-          <span className="rank-big">#{fmt(me.early ? me.joinIndex : me.rank)}</span>
+          {me.early ? (
+            <>
+              <span className="muted-14">Bạn là người đăng ký thứ <strong className="ink">#{fmt(me.joinIndex)}</strong></span>
+              <span className="muted-14">Hạng Top 1.000 <strong className="ink">#{fmt(me.rank)}</strong></span>
+            </>
+          ) : (
+            <>
+              <span className="muted-14">Hạng của bạn trong cuộc đua Top 1.000</span>
+              <span className="rank-big">#{fmt(me.rank)}</span>
+            </>
+          )}
         </div>
         <span className="tier-pill" style={{ background: tier.bg, color: tier.fg }}>{tier.label}</span>
       </div>
 
       <div className="gift-box" style={{ background: myTier.bg }}>
         <span className="gift-kicker" style={{ color: myTier.fg }}>Phần quà dự kiến</span>
-        <span className="gift-value">Cổ phiếu trị giá {vnd(myTier.budget)}</span>
+        <span className="gift-value">Cổ phiếu trị giá {vnd(me.budget)}</span>
         <span className="gift-group">{myTier.group}</span>
       </div>
 
 
       <div className="invite">
-        {/* Người đăng ký sớm đã chắc suất: không còn hạng để leo, chỉ mời bạn cùng nhận. */}
         <div className="stack-2">
-          {me.early ? (
-            <span className="invite-title">Mời bạn bè cùng nhận cổ phiếu</span>
-          ) : (
-            <>
-              <span className="invite-title">Mời bạn bè, leo hạng nhanh hơn</span>
-              <span className="muted-14">Mỗi lượt đăng ký qua link = <strong className="ink">+10 điểm</strong></span>
-            </>
-          )}
+          <span className="invite-title">Mời bạn bè, leo hạng nhanh hơn</span>
+          <span className="muted-14">Mỗi lượt đăng ký qua link = <strong className="ink">+10 điểm</strong></span>
         </div>
         <div className="row-wrap-8">
           <div className="ref-box" title={refUrl}>{refShown}</div>
