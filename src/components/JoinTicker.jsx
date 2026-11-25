@@ -25,33 +25,29 @@ export default function JoinTicker({ recent = [] }) {
   if (items.length === 0) return null;
 
   return (
-    // .container để dải thẳng hàng với hero, form đăng ký và bảng phần thưởng. Trước đây
-    // nó nằm thẳng trong .page nên chạy tràn hết bề ngang màn hình, lệch hẳn so với mọi
-    // khối khác — nhìn như một thanh của trình duyệt chứ không phải một phần của trang.
-    <div className="container">
-      <div className="ticker-wrap">
-        <div
-          className="ticker"
-          ref={scrollRef}
-          role="region"
-          aria-label="Người vừa tham gia waitlist"
-          tabIndex={0}
-        >
-          <div className="ticker-track" ref={trackRef}>
-            {/* Hai nhóm giống nhau để vòng lặp liền mạch; nhóm sau ẩn với trình đọc màn hình */}
-            {[false, true].map((hidden) => (
-              <div key={String(hidden)} className="ticker-group" aria-hidden={hidden || undefined}>
-                {items.map((r, i) => (
-                  // key theo vị trí: danh sách đã nhân bản nên masked trùng nhau là chuyện thường
-                  <span key={`${r.masked}-${i}`} className="ticker-item">
-                    <span className="ticker-dot" aria-hidden="true" />
-                    <span className="ticker-email">{r.masked}</span>
-                    <span className="ticker-verb">vừa tham gia</span>
-                  </span>
-                ))}
-              </div>
-            ))}
-          </div>
+    // Nằm trong header (đã là .container) ở cột giữa, giữa logo và nút đổi theme.
+    <div className="ticker-wrap">
+      <div
+        className="ticker"
+        ref={scrollRef}
+        role="region"
+        aria-label="Người vừa tham gia waitlist"
+        tabIndex={0}
+      >
+        <div className="ticker-track" ref={trackRef}>
+          {/* Hai nhóm giống nhau để vòng lặp liền mạch; nhóm sau ẩn với trình đọc màn hình */}
+          {[false, true].map((hidden) => (
+            <div key={String(hidden)} className="ticker-group" aria-hidden={hidden || undefined}>
+              {items.map((r, i) => (
+                // key theo vị trí: danh sách đã nhân bản nên masked trùng nhau là chuyện thường
+                <span key={`${r.masked}-${i}`} className="ticker-item">
+                  <span className="ticker-dot" aria-hidden="true" />
+                  <span className="ticker-email">{r.masked}</span>
+                  <span className="ticker-verb">vừa tham gia</span>
+                </span>
+              ))}
+            </div>
+          ))}
         </div>
       </div>
     </div>

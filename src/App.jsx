@@ -126,6 +126,7 @@ export default function App() {
         <div className="brand">
           <Logo theme={theme} />
         </div>
+        {/* <JoinTicker recent={recent} /> */}
         <div className="header-actions">
           <ThemeToggle theme={theme} onToggle={() => setTheme((t) => (t === 'dark' ? 'light' : 'dark'))} />
         </div>
@@ -133,7 +134,6 @@ export default function App() {
 
       {/* Ngay dưới header, trước cả headline: bằng chứng người thật đang đăng ký phải đập
           vào mắt trước khi người đọc kịp nghi ngờ lời mời phía dưới có thật hay không. */}
-      <JoinTicker recent={recent} />
 
       <ReserveModal
         open={reserveOpen}
@@ -157,7 +157,7 @@ export default function App() {
             </span>
             <h1>
               {/* Xây Dựng Tài Sản Cùng NEXXA */}
-              <span className="h1-accent">Tặng Cổ Phiếu</span>
+              <span className="h1-accent">Free Cổ Phiếu</span>
             </h1>
             {/* Hai dòng là MỘT ý: ai được (điều kiện) rồi được gì (phần thưởng). Bọc chung
                 để khoảng cách giữa chúng hẹp hơn khoảng cách với h1 và khối khan hiếm —
@@ -165,7 +165,7 @@ export default function App() {
             <Scarcity slots={slots} />
             <div className="lead-group">
               {/* <p className="lead-cond">{fmt(totalSlots)} người đăng ký NEXXA đầu tiên</p> */}
-              <p className="lead">Nhận cổ phiếu VIP — lên tới 10 mã</p>
+              <p className="lead">Join NEXXA For 10 VIP Stocks</p>
             </div>
             <FeaturedStocks />
           </div>
