@@ -17,7 +17,8 @@ const ARC_R = 54;
 const INNER_R = 44;
 
 // Ring có hai chế độ. Mặc định: giữa vòng là số suất còn lại. Truyền `center` (vòng Top khi hết
-// suất): giữa vòng là ngưỡng điểm + dòng phụ, cung theo `fraction` (0..1) thay cho % suất.
+// suất): giữa vòng là dòng chính + dòng ghi chú (tuỳ chọn) + dòng phụ, cung theo `fraction`
+// (0..1) thay cho % suất.
 function Ring({ label, hint, slots, left, tone, center, fraction }) {
   const remain = Math.min(slots, Math.max(0, left));
   const raw = center ? Math.min(1, Math.max(0, fraction)) * 100 : slots ? (remain / slots) * 100 : 0;
@@ -31,7 +32,9 @@ function Ring({ label, hint, slots, left, tone, center, fraction }) {
       aria-valuemin={0}
       aria-valuemax={slots}
       aria-valuenow={remain}
-      aria-label={center ? `${label}: ${center.main} ${center.sub || ''}`.trim() : `Suất ${label}: còn ${fmt(remain)} trên ${fmt(slots)}`}
+      aria-label={center
+        ? [`${label}:`, center.main, center.note, center.sub].filter(Boolean).join(' ')
+        : `Suất ${label}: còn ${fmt(remain)} trên ${fmt(slots)}`}
     >
       <div className="ring-dial">
         <svg viewBox="0 0 120 120" aria-hidden="true">
@@ -51,6 +54,7 @@ function Ring({ label, hint, slots, left, tone, center, fraction }) {
           {center ? (
             <>
               <b className="ring-center-main">{center.main}</b>
+              {center.note && <span className="ring-center-note">{center.note}</span>}
               {center.sub && <span>{center.sub}</span>}
             </>
           ) : (
@@ -71,16 +75,24 @@ function Ring({ label, hint, slots, left, tone, center, fraction }) {
 
 // Vòng Top khi hết suất: hiện ngưỡng điểm và đếm ngược tới deadline. Cung = phần thời gian còn
 // lại (deadline − now) / (deadline − topStart); thiếu topStart thì đầy; sau deadline thì rỗng.
+// Đơn vị là "điểm", không viết tắt "đ" — ngay cạnh giá cổ phiếu, "đ" đọc thành đồng.
+// Sau deadline chỉ còn ngưỡng đã chốt + "Đã chốt": lượt mời không còn cộng điểm nên không
+// được mời người xem "mời 1 bạn để vào Top" nữa.
+// Chữ giữa vòng phải vừa vòng trong (~59px ở dial 80px): "Mời 1 bạn" một dòng, "để vào Top"
+// xuống dòng ghi chú, không nhồi cả câu vào một dòng.
 function useTopClosing(slots) {
   const cd = useCountdown(slots.topDeadline);
   if (slots.topRemaining > 0) return null;
   const cutoff = slots.topCutoff;
-  const main = cutoff === 0 ? 'Mời 1 bạn để vào Top' : cutoff != null ? `≥ ${fmt(cutoff)} đ` : '';
-  if (!cd) return { center: { main, sub: '' }, fraction: 1 };
+  const ended = Boolean(cd?.ended);
+  const invite = cutoff === 0 && !ended;
+  const main = invite ? 'Mời 1 bạn' : cutoff != null ? `≥ ${fmt(cutoff)} điểm` : '';
+  const note = invite ? 'để vào Top' : '';
+  if (!cd) return { center: { main, note, sub: '' }, fraction: 1 };
   const start = slots.topStart ? Date.parse(slots.topStart) : NaN;
   const total = cd.target - start;
   const fraction = cd.ended ? 0 : Number.isFinite(total) && total > 0 ? cd.msLeft / total : 1;
-  return { center: { main, sub: countdownText(cd) }, fraction };
+  return { center: { main, note, sub: countdownText(cd) }, fraction };
 }
 
 export default function Scarcity({ slots }) {

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { api } from '../lib/api.js';
 import { useCatalog } from '../lib/catalog.jsx';
 import { fmt, vnd } from '../lib/format.js';
+import { raceOver, repickNotice } from '../lib/phase.js';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -210,6 +211,11 @@ function Result({ me, returning, onReset, onOpenReserve }) {
     : me.inTop ? 'Top 1.000 · VIP'
     : 'Tiêu chuẩn';
   const tier = { label: pillLabel, fg: myTier.fg, bg: myTier.bg };
+  // Sau TOP_DEADLINE lượt mời không còn cộng điểm: bỏ lời hứa "+10 điểm, leo hạng", link mời
+  // vẫn giữ vì bạn bè đăng ký vẫn nhận được cổ phiếu.
+  const closed = raceOver(me.phase);
+  // Giỏ không còn vừa quyền lợi đã chốt: nhắc ngay ở màn kết quả, không đợi mở modal mới biết.
+  const mustRepick = me.phase === 'repick' && me.needsRepick;
 
   async function copy() {
     try { await navigator.clipboard.writeText(refUrl); } catch { /* bỏ qua */ }
@@ -262,11 +268,19 @@ function Result({ me, returning, onReset, onOpenReserve }) {
       </div>
 
 
+      {mustRepick && <p className="phase-note" role="status">{repickNotice(me.repickDeadline)}</p>}
+
       <div className="invite">
-        <div className="stack-2">
-          <span className="invite-title">Mời bạn bè, leo hạng nhanh hơn</span>
-          <span className="muted-14">Mỗi lượt đăng ký qua link = <strong className="ink">+10 điểm</strong></span>
-        </div>
+        {closed ? (
+          <div className="stack-2">
+            <span className="invite-title">Mời bạn bè cùng nhận cổ phiếu</span>
+          </div>
+        ) : (
+          <div className="stack-2">
+            <span className="invite-title">Mời bạn bè, leo hạng nhanh hơn</span>
+            <span className="muted-14">Mỗi lượt đăng ký qua link = <strong className="ink">+10 điểm</strong></span>
+          </div>
+        )}
         <div className="row-wrap-8">
           <div className="ref-box" title={refUrl}>{refShown}</div>
           <button

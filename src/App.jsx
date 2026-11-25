@@ -123,6 +123,8 @@ export default function App() {
       try {
         await api.reserve(pendingBasket);
         setPendingBasket([]);
+        // Ghi giỏ có thể xoá cờ needsRepick: lấy lại profile để thông báo chọn lại biến mất.
+        refreshMe();
       } catch (err) {
         setReserveError({ message: err.message, wrongPool: err.data?.wrongPool });
         setReserveOpen(true);
@@ -130,8 +132,29 @@ export default function App() {
     }
   };
 
+  // Lấy lại profile sau khi ghi giỏ (needsRepick có thể vừa hết). Lỗi thì giữ profile cũ.
+  // Kiểm tra lại token lúc có kết quả: người dùng bấm "Dùng email khác" giữa chừng thì không
+  // được dựng lại profile của người trước.
+  const refreshMe = () => {
+    const token = session.get();
+    api.me().then((p) => { if (token && session.get() === token) setMe(p); }).catch(() => {});
+  };
+
+  // Giỏ đã ghi xong trong modal: giỏ tạm của lượt chưa đăng nhập không còn việc gì để làm.
+  // Không xoá ở đây thì nó nằm lại tới lúc "Dùng email khác" và bị áp lên giỏ của người sau.
+  const handleSaved = () => {
+    setPendingBasket([]);
+    setReserveError(null);
+    refreshMe();
+  };
+
+  // "Dùng email khác": người sau trên cùng tab không được thừa hưởng gì của người trước —
+  // giỏ tạm, lỗi giỏ, thông báo phiên hết hạn đều thuộc về người trước.
   const handleReset = async () => {
     try { await api.logout(); } catch { /* bỏ qua */ }
+    setPendingBasket([]);
+    setReserveError(null);
+    setSignupNotice('');
     setMe(null);
   };
 
@@ -182,6 +205,7 @@ export default function App() {
           window.scrollTo({ top: 0, behavior: 'smooth' });
         }}
         initialBasket={pendingBasket}
+        onSaved={handleSaved}
         onGoSignup={(basket) => {
           setPendingBasket(basket);
           setReserveOpen(false);
