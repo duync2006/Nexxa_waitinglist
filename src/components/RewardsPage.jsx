@@ -85,7 +85,7 @@ export default function RewardsPage({ me, slots, onBack }) {
     return () => { alive = false; };
   }, [tab, fPage]);
   const pageSize = board?.pageSize ?? 7;
-  // Hạng Top xếp trên toàn bộ user nên ai đã đăng nhập cũng có hạng: nhảy tới trang của mình và ghim.
+  // Chỉ người đã mời ít nhất 1 bạn mới có hạng Top (nhảy tới trang của mình và ghim dòng).
   const hasRank = !!me && me.rank != null;
   const myPage = hasRank ? Math.ceil(me.rank / pageSize) : null;
   const meOffPage = hasRank && !!board && myPage !== board.page;
@@ -105,7 +105,15 @@ export default function RewardsPage({ me, slots, onBack }) {
   // người hạng 1.000 mà đăng ký sau thì vẫn ở ngoài, và ngưỡng 0 thì ai cũng "đạt" về con số.
   // Người ngoài Top cần VƯỢT ngưỡng, tức là cutoff + 10 điểm (một lượt mời).
   let pointsBar = null;
-  if (hasRank && cutoff !== null) {
+  if (me && !hasRank && !over) {
+    // Chưa mời ai: chưa có mặt trên bảng Top. Một lượt mời là có hạng; còn suất thì vào Top luôn.
+    const target = cutoff === null ? POINTS_PER_INVITE : cutoff + POINTS_PER_INVITE;
+    pointsBar = {
+      pct: 0,
+      left: `0 / ${fmt(target)} điểm`,
+      right: target === POINTS_PER_INVITE ? 'Mời 1 bạn để vào Top' : `Thiếu ${fmt(target)} điểm để vào Top`
+    };
+  } else if (hasRank && cutoff !== null) {
     if (me.inTop) {
       pointsBar = {
         pct: 100,
@@ -123,7 +131,7 @@ export default function RewardsPage({ me, slots, onBack }) {
     }
   }
 
-  const rankLine = me ? `Hạng #${fmt(me.rank)} · ${fmt(points)} điểm` : '';
+  const rankLine = me ? (hasRank ? `Hạng #${fmt(me.rank)} · ${fmt(points)} điểm` : `Chưa có hạng Top · ${fmt(points)} điểm`) : '';
   // Thẻ trạng thái: các biến thể theo người xem (chưa đăng ký / First + Top / First / Top / tiêu chuẩn).
   // Ngân sách lấy từ me.budget, server đã cộng dồn.
   const status = isEarly && me.inTop

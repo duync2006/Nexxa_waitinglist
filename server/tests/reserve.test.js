@@ -59,8 +59,8 @@ describe('POST /api/reserve', () => {
     const res = await authed(request(app).post('/api/reserve'), tok).send({ tickers: ['VCB', 'FPT'] });
 
     assert.equal(res.status, 200);
-    // Người đăng ký đầu tiên vừa thuộc First vừa đứng hạng 1 Top: ngân sách cộng dồn 200.000đ.
-    assert.deepEqual(res.body, { ok: true, tickers: ['VCB', 'FPT'], totalValue: 40000, budget: 200000 });
+    // Người đăng ký đầu tiên thuộc First nhưng chưa mời ai nên chưa vào Top: 100.000đ.
+    assert.deepEqual(res.body, { ok: true, tickers: ['VCB', 'FPT'], totalValue: 40000, budget: 100000 });
     const saved = await User.findOne({ email: 'a@test.local' });
     assert.deepEqual(saved.reservation.tickers, ['VCB', 'FPT']);
     assert.ok(saved.reservation.updatedAt instanceof Date);

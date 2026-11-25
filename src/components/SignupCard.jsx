@@ -244,17 +244,27 @@ function Result({ me, returning, onReset, onOpenReserve }) {
       </div>
 
       <div className="rank-row">
-        {/* Người First hiện cả thứ tự đăng ký lẫn hạng Top; ai cũng có hạng Top vì xếp trên toàn bộ user. */}
+        {/* Người First hiện cả thứ tự đăng ký lẫn hạng Top. Chỉ người đã mời ít nhất 1 bạn mới
+            có hạng Top (me.rank null khi chưa mời ai). */}
         <div className="stack-2">
           {me.early ? (
             <>
               <span className="muted-14">Bạn là người đăng ký thứ <strong className="ink">#{fmt(me.joinIndex)}</strong></span>
-              <span className="muted-14">Hạng Top 1.000 <strong className="ink">#{fmt(me.rank)}</strong></span>
+              <span className="muted-14">
+                {me.rank != null
+                  ? <>Hạng Top 1.000 <strong className="ink">#{fmt(me.rank)}</strong></>
+                  : raceOver(me.phase) ? 'Chưa vào Top 1.000' : 'Mời 1 bạn để vào bảng Top 1.000'}
+              </span>
             </>
-          ) : (
+          ) : me.rank != null ? (
             <>
               <span className="muted-14">Hạng của bạn trong cuộc đua Top 1.000</span>
               <span className="rank-big">#{fmt(me.rank)}</span>
+            </>
+          ) : (
+            <>
+              <span className="muted-14">Cuộc đua Top 1.000</span>
+              <span className="muted-14 ink">{raceOver(me.phase) ? 'Bạn chưa vào Top' : 'Mời 1 bạn để có hạng'}</span>
             </>
           )}
         </div>

@@ -31,7 +31,7 @@ mà điều hướng trình duyệt luôn gửi GET, nên route này bắt buộ
 | Method | Path | Mô tả |
 |---|---|---|
 | POST | `/api/stats` | body `{}` → `{ registered, firstSlots, firstRemaining, totalSlots, topRemaining, remaining, topCutoff, topStart, topDeadline, last24h, recent }` |
-| POST | `/api/leaderboard` | body `{ page? }` → bảng Top 1.000 xếp trên toàn bộ người đăng ký: `{ top: [{ rank, masked, points, first }], page, pageSize, total, totalPages, cutoff }` |
+| POST | `/api/leaderboard` | body `{ page? }` → bảng Top 1.000, chỉ gồm người đã mời ≥ 1 bạn (kể cả người First): `{ top: [{ rank, masked, points, first }], page, pageSize, total, totalPages, cutoff }` |
 | POST | `/api/leaderboard/first` | body `{ page? }` → danh sách First 1.000 (chỉ để thông tin, mới nhất trước): `{ rows: [{ joinIndex, masked, at }], page, pageSize, total, totalPages, firstRemaining }` |
 | POST | `/api/waitlist/check` | body `{ email }` → `{ exists }` (không còn trả profile) |
 | POST | `/api/waitlist/request-otp` | body `{ email, ref? }` → gửi OTP 6 số (hết hạn 10 phút, gửi lại sau 60s) |
@@ -48,16 +48,17 @@ FE lưu ở `sessionStorage` (đóng tab là phải OTP lại). Thiếu hoặc s
 Có sẵn Postman collection: `docs/nexxa-waitlist.postman_collection.json`. Request `Xác thực OTP` tự lưu token vào biến `token`.
 
 `profile` = `{ email, early, joinIndex, rank, inTop, budget, vip, registered, refCode, invites, phase, needsRepick, repickDeadline }`.
-`rank` là hạng Top trên toàn bộ người đăng ký, **ai cũng có** (kể cả First 1.000).
+`rank` là hạng Top trong nhóm đã mời ≥ 1 bạn; **`null` khi chưa mời ai** (kể cả người First).
 
 **Hai campaign chạy song song, có thể chồng nhau:**
 
 1. **First 1.000** — người có `joinIndex` 1..1.000 (1.000 người đăng ký đầu tiên) chắc chắn có suất,
    bất kể điểm hay deadline.
-2. **Top 1.000** — xếp **toàn bộ** người đăng ký (kể cả người First): điểm (`invites × 10`) cao
-   trước, bằng điểm thì ai đăng ký trước đứng trên. Hạng 1..1.000 **tại `TOP_DEADLINE`** nhận quà Top.
+2. **Top 1.000** — chỉ xét người đã **mời được ít nhất 1 bạn** (kể cả người First): điểm
+   (`invites × 10`) cao trước, bằng điểm thì ai đăng ký trước đứng trên. Hạng 1..1.000 **tại
+   `TOP_DEADLINE`** nhận quà Top. Người chưa mời ai không có hạng, kể cả khi còn suất.
 
-Bảng xếp hạng (`/api/leaderboard`) và ngưỡng `cutoff` tính trên toàn bộ người đăng ký.
+Bảng xếp hạng (`/api/leaderboard`), ngưỡng `cutoff` và `topRemaining` chỉ tính trên nhóm đã mời ≥ 1 bạn.
 
 ## Luật chọn cổ phiếu Reserve
 

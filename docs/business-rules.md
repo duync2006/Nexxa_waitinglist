@@ -15,7 +15,7 @@ Ba mốc thời gian của campaign đọc từ biến môi trường, xem mục
 | Hằng số | Giá trị | Ý nghĩa | File |
 |---|---|---|---|
 | `FIRST_SLOTS` | 1.000 | Số suất First 1.000 (người đăng ký sớm) | `shared/catalog.js` |
-| `TOTAL_SLOTS` | 1.000 | Số suất Top 1.000 (xếp trên toàn bộ người đăng ký) | `shared/catalog.js` |
+| `TOTAL_SLOTS` | 1.000 | Số suất Top 1.000 (chỉ người đã mời ≥ 1 bạn) | `shared/catalog.js` |
 | `FIRST_BUDGET` | 100.000đ | Ngân sách suất First | `shared/catalog.js` |
 | `TOP_BUDGET` | 100.000đ | Ngân sách suất Top | `shared/catalog.js` |
 | `REST_BUDGET` | 50.000đ | Ngân sách người không thuộc suất nào | `shared/catalog.js` |
@@ -76,15 +76,17 @@ Hai campaign chạy **độc lập và có thể chồng nhau**. Người thuộ
 ### 4.1 First 1.000 (đăng ký sớm)
 - Điều kiện: `joinIndex <= FIRST_SLOTS`, kiểm tra bằng `isEarlyJoin(joinIndex)`.
 - **Chắc chắn có suất**, không phụ thuộc điểm hay deadline. Campaign First không đóng theo ngày, nó tự đóng khi đủ 1.000 người.
-- First **không** loại người đó khỏi bảng Top: người First cũng có hạng Top.
+- First **không** loại người đó khỏi bảng Top: người First mời được ≥ 1 bạn cũng có hạng Top.
 
 ### 4.2 Top 1.000 (đua theo điểm)
-- Xếp **toàn bộ** người đăng ký (kể cả người First) theo `RANK_ORDER = { invites: -1, joinIndex: 1 }`:
+- **Điều kiện tham gia:** đã mời được ít nhất 1 bạn (`invites >= MIN_TOP_INVITES = 1`, lọc `RACE` trong
+  `waitlist.service.js`). Đăng ký sớm không đủ để vào Top. Người chưa mời ai không có hạng (`rank = null`),
+  không lên bảng, không chiếm suất và không ảnh hưởng ngưỡng.
+- Nhóm đua (kể cả người First) xếp theo `RANK_ORDER = { invites: -1, joinIndex: 1 }`:
   1. Điểm cao đứng trước.
   2. Bằng điểm thì ai đăng ký trước (`joinIndex` nhỏ hơn) đứng trước.
-- `rank` = số người đứng trên + 1, **mọi người đều có hạng** (không còn `null`). Hạng 1 đến 1.000 là Top.
-- Hệ quả đã chấp nhận: lúc mới mở, nhóm First với 0 lượt mời chiếm kín Top 1.000. Người đăng ký từ #1.001
-  phải mời được ít nhất 1 người mới chen vào được.
+- `rank` = số người trong nhóm đua đứng trên + 1. Hạng 1 đến 1.000 là Top.
+- Chưa đủ 1.000 người đi mời thì ai mời được 1 bạn là vào Top. Số người `inTop` khi chốt có thể ít hơn 1.000.
 - Trước `TOP_DEADLINE`, hạng **thay đổi theo thời gian**. Chỉ hạng **tại deadline** (bản chốt) mới nhận quà Top.
 
 ### 4.3 Hàm quyết định
@@ -142,9 +144,9 @@ Thứ tự vận hành xem [README, mục "Chốt Top 1.000"](../README.md).
 
 **`npm run finalize`** (`server/scripts/finalize-top.js`, logic ở `finalize.service.js`):
 1. Từ chối chạy nếu `now < TOP_DEADLINE`.
-2. Duyệt user **đăng ký trước deadline** theo `RANK_ORDER`, gán `topRank` theo vị trí (không gọi `rankOf` từng người).
+2. Duyệt user **đăng ký trước deadline** theo `RANK_ORDER`, gán `topRank` theo vị trí (không gọi `rankOf` từng người). Người chưa mời ai: `topRank = null`, không `inTop`.
    Người đăng ký muộn không được xếp hạng.
-3. Ghi `user.final = { early, topRank, inTop, budget, pools, finalizedAt, needsRepick }`. Hạng 1 đến 1.000 là `inTop`.
+3. Ghi `user.final = { early, topRank, inTop, budget, pools, finalizedAt, needsRepick }`. Hạng 1 đến 1.000 **và** đã mời ≥ 1 bạn là `inTop`.
 4. Giỏ **không hợp lệ** (có mã ngoài `pools`, mã thiếu giá, hoặc tổng theo `lockedPrices` > `budget`) thì
    `needsRepick = true` và gọi `sendRepickEmail`. Hàm này hiện **chỉ in ra console** (mailer chưa gắn nhà cung cấp).
 5. Idempotent: user đã có `final` bị bỏ qua nhưng vẫn chiếm một vị trí trong bảng hạng nên hạng của người khác
@@ -277,11 +279,11 @@ Mã lỗi riêng của đợt này: **401** thiếu hoặc sai token, **423** gi
 
 ### Cách tính các con số trong stats
 - `firstRemaining = max(0, FIRST_SLOTS − số người có joinIndex ≤ 1.000)`
-- `topRemaining = max(0, TOTAL_SLOTS − registered)`. Top xếp trên toàn bộ người đăng ký nên chừng nào chưa đủ
-  1.000 người thì ai cũng đang trong Top. Đủ rồi thì về 0, chỉ còn cách mời bạn để vượt `topCutoff`.
+- `topRemaining = max(0, TOTAL_SLOTS − số người đã mời ≥ 1 bạn)`. Còn suất thì mời 1 bạn là vào Top; hết suất
+  thì phải vượt `topCutoff`.
 - `remaining = firstRemaining + topRemaining`. Giữ để không vỡ client cũ; hai campaign chồng nhau nên đây
   không phải số người còn vào được VIP.
-- `topCutoff` là điểm của người hạng 1.000 trên toàn bộ user, `null` khi chưa đủ 1.000 người.
+- `topCutoff` là điểm của người hạng 1.000 trong nhóm đã mời ≥ 1 bạn (thấp nhất 10), `null` khi nhóm này chưa đủ 1.000 người.
 - `topStart`, `topDeadline` là chuỗi ISO hoặc `null` khi chưa đặt biến môi trường.
 - `last24h` là số người đăng ký trong 24 giờ gần nhất.
 - `recent` là 12 người đăng ký gần nhất, email đã được che.
@@ -304,7 +306,7 @@ Mã lỗi riêng của đợt này: **401** thiếu hoặc sai token, **423** gi
 |---|---|
 | `early` | Người dùng thuộc First 1.000 |
 | `joinIndex` | Thứ tự đăng ký |
-| `rank` | Hạng Top trên toàn bộ user, **mọi người đều có** |
+| `rank` | Hạng Top trong nhóm đã mời ≥ 1 bạn; `null` khi chưa mời ai |
 | `inTop` | Đang trong Top 1.000. Có `user.final` thì lấy theo bản chốt. Người đăng ký muộn luôn `false` |
 | `budget` | First + Top cộng dồn |
 | `vip` | `early \|\| inTop`. Server tự quyết định, FE chỉ đọc cờ này |

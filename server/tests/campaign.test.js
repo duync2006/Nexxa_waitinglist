@@ -243,15 +243,15 @@ describe('Sau TOP_DEADLINE', () => {
     unset();
     process.env.TOP_DEADLINE = iso(-HOUR);
     process.env.REPICK_DEADLINE = iso(HOUR);
-    // Hết suất First: người này là #1.001. Dù đang đứng hạng 1 (DB chỉ có mình họ) vẫn
-    // không được tính vào Top vì đăng ký sau khi cuộc đua đã khép.
+    // Hết suất First: người này là #1.001, đăng ký sau khi cuộc đua đã khép nên không có
+    // lượt mời nào được tính, không có hạng Top.
     await Counter.updateOne({ _id: 'users' }, { $set: { seq: FIRST_SLOTS } }, { upsert: true });
 
     const joined = await joinViaApi(request, app, 'muon@test.local');
     const { profile, token } = joined.body;
 
     assert.equal(profile.early, false);
-    assert.equal(profile.rank, 1);
+    assert.equal(profile.rank, null);
     assert.equal(profile.inTop, false);
     assert.equal(profile.vip, false);
     assert.equal(profile.budget, 50000);

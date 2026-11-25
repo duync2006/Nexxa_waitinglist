@@ -43,9 +43,10 @@ async function makeUsers(count, { startIndex = AFTER_FIRST, invites = 0 } = {}) 
 }
 
 // Tạo đúng `rank - 1` người đứng trên (không thuộc First) rồi trả về email của người ở hạng `rank`.
+// Ai cũng đã mời 1 bạn: chỉ người có ít nhất 1 lượt mời mới được xếp hạng Top.
 async function userAtRank(rank) {
-  if (rank > 1) await makeUsers(rank - 1);
-  const [me] = await makeUsers(1, { startIndex: AFTER_FIRST + rank - 1 });
+  if (rank > 1) await makeUsers(rank - 1, { invites: 1 });
+  const [me] = await makeUsers(1, { startIndex: AFTER_FIRST + rank - 1, invites: 1 });
   return me.email;
 }
 
@@ -56,19 +57,30 @@ const reserve = async (email, tickers) =>
   authed(request(app).post('/api/reserve'), await tokenOf(email)).send({ tickers });
 
 describe('Luật quyền lợi: First và Top song song, cộng dồn', () => {
-  it('chỉ First (hạng > 1000) được 100.000đ', async () => {
+  it('chỉ First (chưa mời ai) được 100.000đ, không có hạng Top', async () => {
     const [early] = await makeUsers(1, { startIndex: 1, invites: 0 });
-    // 1.000 người vào sau nhưng mỗi người mời được 1 bạn: đẩy người #1 xuống hạng 1.001.
-    await makeUsers(TOTAL_SLOTS, { invites: 1 });
 
     const res = await options(early.email);
 
     assert.equal(res.status, 200);
     assert.equal(res.body.early, true);
-    assert.equal(res.body.rank, TOTAL_SLOTS + 1);
+    assert.equal(res.body.rank, null);
     assert.equal(res.body.inTop, false);
     assert.equal(res.body.budget, 100000);
     assert.deepEqual(res.body.pools, ['vip', 'standard']);
+  });
+
+  it('First đã mời nhưng bị đẩy xuống hạng 1.001 thì chỉ còn 100.000đ của First', async () => {
+    const [early] = await makeUsers(1, { startIndex: 1, invites: 1 });
+    // 1.000 người vào sau, mỗi người mời được 2 bạn: đẩy người #1 xuống hạng 1.001.
+    await makeUsers(TOTAL_SLOTS, { invites: 2 });
+
+    const res = await options(early.email);
+
+    assert.equal(res.body.early, true);
+    assert.equal(res.body.rank, TOTAL_SLOTS + 1);
+    assert.equal(res.body.inTop, false);
+    assert.equal(res.body.budget, 100000);
   });
 
   it('chỉ Top được 100.000đ', async () => {
@@ -86,8 +98,20 @@ describe('Luật quyền lợi: First và Top song song, cộng dồn', () => {
     assert.equal(res.body.phase, 'open');
   });
 
-  it('First và Top được 200.000đ', async () => {
-    const [both] = await makeUsers(1, { startIndex: FIRST_SLOTS }); // người đăng ký thứ 1.000
+  it('chưa đủ 1.000 người đi mời thì mời 1 bạn là vào Top', async () => {
+    // 1.000 người First đều chưa mời ai: không ai trong số họ chiếm chỗ Top.
+    await makeUsers(FIRST_SLOTS, { startIndex: 1 });
+    const [me] = await makeUsers(1, { invites: 1 });
+
+    const res = await options(me.email);
+
+    assert.equal(res.body.rank, 1);
+    assert.equal(res.body.inTop, true);
+    assert.equal(res.body.budget, 100000);
+  });
+
+  it('First và Top (đã mời ít nhất 1 bạn) được 200.000đ', async () => {
+    const [both] = await makeUsers(1, { startIndex: FIRST_SLOTS, invites: 1 }); // người đăng ký thứ 1.000
 
     const res = await options(both.email);
 
@@ -98,7 +122,7 @@ describe('Luật quyền lợi: First và Top song song, cộng dồn', () => {
   });
 
   it('First và Top chọn chung một giỏ tới 200.000đ', async () => {
-    const [both] = await makeUsers(1, { startIndex: 1 });
+    const [both] = await makeUsers(1, { startIndex: 1, invites: 1 });
     const tickers = ['VCB', 'FPT', 'HPG', 'MBB', 'ACB', 'PNJ', 'PLX', 'TPB', 'REE', 'DGC'];
 
     const res = await reserve(both.email, tickers);
@@ -108,22 +132,20 @@ describe('Luật quyền lợi: First và Top song song, cộng dồn', () => {
     assert.equal(res.body.budget, 200000);
   });
 
-  it('không thuộc nhóm nào được 50.000đ, chỉ standard', async () => {
-    // Đủ First 1.000, đều 0 điểm: họ chiếm kín Top 1.000, người #1.001 rơi xuống hạng 1.001.
-    await makeUsers(FIRST_SLOTS, { startIndex: 1 });
+  it('không thuộc First và chưa mời ai thì 50.000đ, chỉ standard, không có hạng', async () => {
     const [late] = await makeUsers(1, { startIndex: FIRST_SLOTS + 1 });
 
     const res = await options(late.email);
 
     assert.equal(res.body.early, false);
-    assert.equal(res.body.rank, TOTAL_SLOTS + 1);
+    assert.equal(res.body.rank, null);
     assert.equal(res.body.inTop, false);
     assert.equal(res.body.budget, 50000);
     assert.deepEqual(res.body.pools, ['standard']);
   });
 
-  it('First có hạng Top là số, không còn null', async () => {
-    const [early] = await makeUsers(1, { startIndex: 1, invites: 0 });
+  it('First có ít nhất 1 lượt mời thì có hạng Top là số', async () => {
+    const [early] = await makeUsers(1, { startIndex: 1, invites: 1 });
     await makeUsers(3, { invites: 2 });
 
     const res = await options(early.email);
@@ -189,7 +211,7 @@ describe('Quyền lợi tính theo hạng hiện tại, không chốt ở lần 
     assert.equal(first.body.budget, 100000);
 
     // Đẩy user xuống dưới hạng 1.000: thêm 1.200 người nhiều điểm hơn.
-    await makeUsers(1200, { startIndex: 10000, invites: 1 });
+    await makeUsers(1200, { startIndex: 10000, invites: 2 });
 
     const res = await options(email);
 
@@ -203,7 +225,7 @@ describe('Quyền lợi tính theo hạng hiện tại, không chốt ở lần 
   it('hạng đã trôi thì không chọn được mã VIP nữa', async () => {
     const email = await userAtRank(3);
     await reserve(email, ['VCB']);
-    await makeUsers(1200, { startIndex: 10000, invites: 1 });
+    await makeUsers(1200, { startIndex: 10000, invites: 2 });
 
     const res = await reserve(email, ['VCB', 'PNJ']);
 

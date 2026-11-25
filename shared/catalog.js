@@ -4,7 +4,7 @@
 
 // Hai đường vào VIP chạy SONG SONG, mỗi đường 1.000 suất, và CÓ THỂ chồng lên nhau:
 //   1. FIRST_SLOTS — 1.000 người đăng ký đầu tiên (joinIndex 1..1.000), chắc chắn bất kể điểm.
-//   2. TOTAL_SLOTS — Top 1.000 theo điểm, xếp trên TOÀN BỘ người đăng ký, kể cả người First.
+//   2. TOTAL_SLOTS — Top 1.000 theo điểm, chỉ xét người đã mời ít nhất 1 bạn (kể cả người First).
 // Thuộc cả hai thì quyền lợi cộng dồn (xem entitlementOf). Tên TOTAL_SLOTS giữ nguyên vì
 // /api/catalog và /api/stats đã trả về key `totalSlots` — đổi tên là vỡ client cũ.
 export const FIRST_SLOTS = 1000;
@@ -15,7 +15,7 @@ export const STANDARD_SLOTS = 9000;
 // Người đăng ký sớm: joinIndex tăng đều 1 theo thứ tự đăng ký (bộ đếm Counter 'users').
 export const isEarlyJoin = (joinIndex) => joinIndex <= FIRST_SLOTS;
 
-// Hạng Top (xếp trên toàn bộ user) nằm trong 1..TOTAL_SLOTS.
+// Hạng Top (trong nhóm đã mời ít nhất 1 bạn) nằm trong 1..TOTAL_SLOTS. rank null = chưa mời ai.
 export const isTopRank = (rank) => rank != null && rank <= TOTAL_SLOTS;
 
 const S = (s) => s.split(';').map((p) => { const [t, n] = p.split('|'); return { t, n }; });

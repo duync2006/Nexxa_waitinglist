@@ -67,10 +67,12 @@ Người thuộc First vẫn được đi mời và tham gia đua Top để nh�
 | Không thuộc nhóm nào | 50.000đ | Chỉ Standard |
 
 - **First**: `joinIndex <= 1000`. Suất này chắc chắn, không phụ thuộc điểm hay deadline.
-- **Top**: xếp **tất cả** người đăng ký, kể cả người thuộc First, theo `invites` giảm dần. Bằng điểm
-  thì `joinIndex` nhỏ hơn đứng trên. Hạng 1 đến 1.000 thuộc Top. `RACE_FILTER` bị bỏ.
-- Hệ quả đã được chấp nhận: lúc mới mở, nhóm First với 0 lượt mời chiếm kín Top 1.000. Người đăng ký
-  từ #1.001 trở đi phải mời được ít nhất 1 người mới chen vào được.
+- **Top** (sửa đổi 2026-11-26): chỉ xét người đã **mời được ít nhất 1 bạn**, kể cả người thuộc First,
+  theo `invites` giảm dần. Bằng điểm thì `joinIndex` nhỏ hơn đứng trên. Hạng 1 đến 1.000 thuộc Top.
+  Người chưa mời ai không có hạng Top (`rank = null`), không lên bảng TOP, không chiếm suất.
+  `topRemaining = 1.000 − số người đã mời ≥ 1 bạn`; `topCutoff` tính trong nhóm này (`null` khi chưa đủ
+  1.000 người). Số người được Top khi chốt có thể ít hơn 1.000.
+- (Đã thay) Bản đầu của spec xếp tất cả người đăng ký, khiến nhóm First 0 lượt mời chiếm kín Top 1.000.
 - Công thức trong `shared/catalog.js`:
   ```js
   ENTITLEMENTS = { first: 100000, top: 100000, rest: 50000 }  // pools như bảng trên

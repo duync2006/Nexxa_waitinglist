@@ -211,7 +211,9 @@ export default function ReserveModal({ open, onClose, me, onGoSignup, initialBas
                     ? 'Ngân sách First + Top'
                     : opts.early
                       ? 'Ngân sách First 1.000'
-                      : `Ngân sách hạng #${opts.rank ?? '—'}`}
+                      : opts.inTop
+                        ? `Ngân sách hạng #${opts.rank}`
+                        : 'Ngân sách Tiêu chuẩn'}
               </span>
               <span className="reserve-budget-num">{vnd(total)} / {vnd(budget)}</span>
             </div>

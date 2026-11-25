@@ -73,9 +73,9 @@ describe('finalizeTop', () => {
     await assert.rejects(() => finalizeTop(), /Chưa tới TOP_DEADLINE/);
   });
 
-  it('chốt đúng 1.000 người inTop khi có 1.005 user', async () => {
+  it('chốt đúng 1.000 người inTop khi có 1.005 user đã mời', async () => {
     setDeadline();
-    await seed(1005);
+    await seed(1005, () => 1);
     const r = await finalizeTop(new Date(), quiet);
 
     assert.equal(r.total, 1005);
@@ -88,9 +88,9 @@ describe('finalizeTop', () => {
     assert.equal((await byJoin(1005)).final.budget, 50000);
   });
 
-  it('dưới 1.000 user thì tất cả inTop', async () => {
+  it('dưới 1.000 người đã mời thì tất cả họ inTop', async () => {
     setDeadline();
-    await seed(7);
+    await seed(7, () => 1);
     const r = await finalizeTop(new Date(), quiet);
 
     assert.equal(await User.countDocuments({ 'final.inTop': true }), 7);
@@ -98,6 +98,21 @@ describe('finalizeTop', () => {
     assert.equal(r.first, 7);
     assert.equal(r.both, 7);
     assert.equal((await byJoin(3)).final.budget, 200000);
+  });
+
+  it('người chưa mời ai không vào Top dù còn suất, và không có topRank', async () => {
+    setDeadline();
+    await seed(7, (j) => (j <= 3 ? 1 : 0));
+    const r = await finalizeTop(new Date(), quiet);
+
+    assert.equal(r.top, 3);
+    assert.equal(r.inTopTotal, 3);
+    const zero = await byJoin(5);
+    assert.equal(zero.final.inTop, false);
+    assert.equal(zero.final.topRank, null);
+    assert.equal(zero.final.early, true);
+    assert.equal(zero.final.budget, 100000, 'vẫn giữ suất First');
+    assert.equal((await byJoin(2)).final.topRank, 2);
   });
 
   it('chạy lại lần hai không đổi gì, skipped = total', async () => {
@@ -111,14 +126,15 @@ describe('finalizeTop', () => {
     assert.equal(r.total, 12);
     assert.equal(r.skipped, 12);
     assert.equal(r.top, 0, 'lần chạy lại không chốt ai nên không đếm ai');
-    assert.equal(r.inTopTotal, 12, 'nhưng con số từ DB vẫn đúng');
+    // j % 3 === 0 (4 người) chưa mời ai nên không vào Top.
+    assert.equal(r.inTopTotal, 8, 'nhưng con số từ DB vẫn đúng');
     assert.deepEqual(after, before);
   });
 
   it('nhiều lần chạy song song: mỗi người chỉ được đếm và gửi mail đúng một lần', async () => {
     setDeadline();
     // Giỏ 300.000đ vượt cả ngân sách cộng dồn 200.000đ -> ai cũng phải chọn lại.
-    await seed(6, () => 0, () => basket(['VCB', 'FPT', 'HPG'], 100000));
+    await seed(6, () => 1, () => basket(['VCB', 'FPT', 'HPG'], 100000));
     const mails = [];
     const notify = async (email) => { mails.push(email); };
     const runs = await Promise.all([1, 2, 3].map(() => finalizeTop(new Date(), { notify })));
@@ -200,7 +216,7 @@ describe('finalizeTop', () => {
 
   it('người đăng ký sau deadline không được xếp hạng và không có final', async () => {
     setDeadline();
-    await seed(3);
+    await seed(3, () => 1);
     await User.create({
       email: 'late@test.local', refCode: 'LATE01', joinIndex: 4, score: 4, invites: 99,
       createdAt: new Date(Date.now() - 1000)

@@ -1,7 +1,7 @@
 import { POOL_OF_TICKER, TOTAL_SLOTS, entitlementOf, isEarlyJoin } from '../../shared/catalog.js';
 import { getCampaign } from '../config/campaign.js';
 import { User } from '../models/index.js';
-import { NUMBERED, RANK_ORDER } from './waitlist.service.js';
+import { NUMBERED, RANK_ORDER, inRace } from './waitlist.service.js';
 import { getPriceTable } from './price.service.js';
 import { sendRepickEmail } from './mailer.service.js';
 
@@ -41,7 +41,7 @@ export async function finalizeTop(now = new Date(), { notify = sendRepickEmail }
   };
   const cursor = User.find({ ...NUMBERED, createdAt: { $lt: topDeadline } })
     .sort(RANK_ORDER)
-    .select('email joinIndex final reservation')
+    .select('email joinIndex invites final reservation')
     .lean()
     .cursor();
 
@@ -91,15 +91,18 @@ export async function finalizeTop(now = new Date(), { notify = sendRepickEmail }
       continue;
     }
 
+    // Sắp theo invites giảm dần nên toàn bộ nhóm đua (đã mời >= 1 bạn) đứng trước: `position`
+    // của họ chính là hạng Top. Người chưa mời ai không có hạng và không vào Top.
     const early = isEarlyJoin(u.joinIndex);
-    const inTop = position <= TOTAL_SLOTS;
+    const racing = inRace(u.invites);
+    const inTop = racing && position <= TOTAL_SLOTS;
     const { budget, pools } = entitlementOf({ early, inTop });
 
     const priceOf = priceOfUser(u, prices);
     const tickers = u.reservation?.tickers ?? [];
     const needsRepick = !basketFits(tickers, priceOf, { budget, pools });
 
-    batch.push({ u, final: { early, topRank: position, inTop, budget, pools, finalizedAt: now, needsRepick } });
+    batch.push({ u, final: { early, topRank: racing ? position : null, inTop, budget, pools, finalizedAt: now, needsRepick } });
     if (batch.length >= BATCH) await flush();
   }
   await flush();

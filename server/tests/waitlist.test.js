@@ -28,9 +28,9 @@ describe('GET /api/stats', () => {
       firstSlots: 1000,
       firstRemaining: 999,
       totalSlots: 1000,
-      // Top xếp trên toàn bộ người đăng ký: người đầu tiên chiếm luôn một suất Top.
-      topRemaining: 999,
-      remaining: 1998,
+      // Mới đăng ký, chưa mời ai: chưa chiếm suất Top nào.
+      topRemaining: 1000,
+      remaining: 1999,
       topCutoff: null,
       topStart: null,
       topDeadline: null,
@@ -91,13 +91,24 @@ describe('GET /api/stats', () => {
       }))
     );
 
-  it('topRemaining tính trên toàn bộ người đăng ký, kể cả người First', async () => {
+  it('topRemaining chỉ trừ người đã mời ít nhất 1 bạn', async () => {
     await fill(400);
+    // 30 người trong số đó đã mời được bạn: chỉ họ chiếm suất Top.
+    await User.updateMany({ joinIndex: { $lte: 30 } }, { $set: { invites: 1 } });
 
     const res = await request(app).post('/api/stats');
 
     assert.equal(res.body.firstRemaining, 600);
-    assert.equal(res.body.topRemaining, 600);
+    assert.equal(res.body.topRemaining, 970);
+  });
+
+  it('chưa ai mời bạn thì Top còn nguyên 1.000 suất và chưa có ngưỡng', async () => {
+    await fill(1200);
+
+    const res = await request(app).post('/api/stats');
+
+    assert.equal(res.body.topRemaining, 1000);
+    assert.equal(res.body.topCutoff, null);
   });
 
   it('stats trả topCutoff và topDeadline', async () => {
@@ -131,8 +142,9 @@ describe('GET /api/stats', () => {
   });
 
   it('remaining không âm khi đã vượt quá tổng số suất VIP', async () => {
-    // Nhét thẳng 2001 user vào DB cho nhanh, không qua API
+    // Nhét thẳng 2001 user vào DB cho nhanh, không qua API; ai cũng đã mời 1 bạn.
     await fill(2001);
+    await User.updateMany({}, { $set: { invites: 1 } });
 
     const res = await request(app).post('/api/stats');
 
@@ -232,12 +244,12 @@ describe('POST /api/waitlist/verify', () => {
       ].sort()
     );
     assert.equal(profile.email, 'a@test.local');
-    // Người đầu tiên vừa thuộc First 1.000 vừa đứng hạng 1 của Top: cộng dồn 200.000đ.
+    // Người đầu tiên thuộc First 1.000 nhưng chưa mời ai: chưa có hạng Top, 100.000đ.
     assert.equal(profile.early, true);
     assert.equal(profile.joinIndex, 1);
-    assert.equal(profile.rank, 1);
-    assert.equal(profile.inTop, true);
-    assert.equal(profile.budget, 200000);
+    assert.equal(profile.rank, null);
+    assert.equal(profile.inTop, false);
+    assert.equal(profile.budget, 100000);
     assert.equal(profile.vip, true);
     assert.equal(profile.invites, 0);
     assert.equal(profile.refCode.length, 6);
@@ -336,14 +348,16 @@ describe('POST /api/leaderboard', () => {
     const res = await request(app).post('/api/leaderboard');
 
     assert.equal(res.status, 200);
-    assert.deepEqual(res.body.top.map((r) => [r.rank, r.points]), [[1, 30], [2, 30], [3, 0]]);
+    // Người chưa mời ai không có mặt trên bảng Top.
+    assert.deepEqual(res.body.top.map((r) => [r.rank, r.points]), [[1, 30], [2, 30]]);
+    assert.equal(res.body.total, 2);
     assert.equal(res.body.top[0].masked, 'bi•••••n@test.local');
     assert.equal(res.body.cutoff, null);
     assert.ok(!JSON.stringify(res.body).includes('binhtran'));
   });
 
   it('mỗi trang 7 người, page 2 tiếp nối hạng của page 1', async () => {
-    await seed(10);
+    await seed(10, () => 1);
 
     const p1 = await request(app).post('/api/leaderboard').send({ page: 1 });
     const p2 = await request(app).post('/api/leaderboard').send({ page: 2 });
@@ -355,7 +369,7 @@ describe('POST /api/leaderboard', () => {
   });
 
   it('page không hợp lệ thì về trang 1, vượt quá thì trả rỗng', async () => {
-    await seed(3);
+    await seed(3, () => 1);
 
     const bad = await request(app).post('/api/leaderboard').send({ page: 'abc' });
     const far = await request(app).post('/api/leaderboard').send({ page: 99 });
@@ -374,24 +388,34 @@ describe('POST /api/leaderboard', () => {
     assert.equal(res.body.rank, 1);
   });
 
+  it('người chưa mời ai có rank null trong profile', async () => {
+    await seed(3, (n) => (n === 1 ? 1 : 0));
+
+    const token = await createSession((await User.findOne({ email: 'user2@test.local' }))._id);
+    const res = await authed(request(app).post('/api/waitlist/me'), token);
+
+    assert.equal(res.body.rank, null);
+    assert.equal(res.body.inTop, false);
+  });
+
   it('leaderboard gồm cả người First và gắn first: true', async () => {
     // Người đăng ký sớm có điểm cao giờ cũng đua Top như mọi người.
     await User.create({ email: 'som@test.local', refCode: 'SOM001', joinIndex: 1, score: 1, invites: 50 });
-    await seed(2);
+    await seed(2, () => 1);
 
     const res = await request(app).post('/api/leaderboard');
     const somToken = await createSession((await User.findOne({ email: 'som@test.local' }))._id);
     const som = await authed(request(app).post('/api/waitlist/me'), somToken);
 
     assert.equal(res.body.total, 3);
-    assert.deepEqual(res.body.top.map((r) => [r.rank, r.points, r.first]), [[1, 500, true], [2, 0, false], [3, 0, false]]);
+    assert.deepEqual(res.body.top.map((r) => [r.rank, r.points, r.first]), [[1, 500, true], [2, 10, false], [3, 10, false]]);
     assert.equal(som.body.rank, 1);
     assert.equal(som.body.inTop, true);
     assert.equal(som.body.vip, true);
     assert.equal(som.body.budget, 200000);
   });
 
-  it('cutoff là điểm của người hạng 1.000 tính trên toàn bộ user', async () => {
+  it('cutoff là điểm của người hạng 1.000 trong số người đã mời, kể cả người First', async () => {
     // 999 người First có 1 lượt mời, người thứ 1.000 (không thuộc First) có 3 lượt mời.
     await User.insertMany(Array.from({ length: 999 }, (_, i) => ({
       email: `f${i + 1}@test.local`, refCode: `FF${String(i + 1).padStart(4, '0')}`,
@@ -404,6 +428,20 @@ describe('POST /api/leaderboard', () => {
     assert.equal(res.body.total, 1000);
     assert.equal(res.body.cutoff, 10);
     assert.equal(res.body.top[0].first, false);
+  });
+
+  it('người chưa mời ai không đẩy ngưỡng: 1.000 người First 0 điểm thì cutoff vẫn null', async () => {
+    await User.insertMany(Array.from({ length: 1000 }, (_, i) => ({
+      email: `f${i + 1}@test.local`, refCode: `FF${String(i + 1).padStart(4, '0')}`,
+      joinIndex: i + 1, score: i + 1, invites: 0
+    })));
+    await seed(1, () => 1);
+
+    const res = await request(app).post('/api/leaderboard');
+
+    assert.equal(res.body.total, 1);
+    assert.equal(res.body.cutoff, null);
+    assert.deepEqual(res.body.top.map((r) => [r.rank, r.points]), [[1, 10]]);
   });
 });
 

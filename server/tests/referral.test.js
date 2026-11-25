@@ -44,12 +44,12 @@ describe('Cộng điểm cho người mời', () => {
     for (const n of [2, 3]) await joinViaApi(request, app, `u${n}@test.local`);
 
     const late = await joinViaApi(request, app, 'late@test.local'); // người thứ 5, 0 điểm
-    assert.equal(late.body.profile.rank, 5); // sau u1 (10 điểm), rồi cua-u1, u2, u3 (0 điểm, vào trước)
+    assert.equal(late.body.profile.rank, null); // chưa mời ai: chưa có hạng Top
 
     await joinViaApi(request, app, 'moi@test.local', late.body.profile.refCode);
 
-    // 10 điểm: vượt cua-u1, u2, u3 (0 điểm), nhưng vẫn sau u1 — bằng điểm thì ai
-    // đăng ký trước đứng trên.
+    // 10 điểm: vào bảng Top, đứng sau u1 — bằng điểm thì ai đăng ký trước đứng trên.
+    // cua-u1, u2, u3 (0 điểm) không có hạng.
     const res = await authed(request(app).post('/api/waitlist/me'), late.body.token);
     assert.equal(res.body.rank, 2);
   });
