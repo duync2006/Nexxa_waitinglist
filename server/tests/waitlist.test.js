@@ -226,7 +226,10 @@ describe('POST /api/waitlist/verify', () => {
     const profile = res.body.profile;
     assert.deepEqual(
       Object.keys(profile).sort(),
-      ['budget', 'early', 'email', 'inTop', 'invites', 'joinIndex', 'rank', 'refCode', 'registered', 'vip'].sort()
+      [
+        'budget', 'early', 'email', 'inTop', 'invites', 'joinIndex', 'needsRepick', 'phase', 'rank', 'refCode',
+        'registered', 'repickDeadline', 'vip'
+      ].sort()
     );
     assert.equal(profile.email, 'a@test.local');
     // Người đầu tiên vừa thuộc First 1.000 vừa đứng hạng 1 của Top: cộng dồn 200.000đ.

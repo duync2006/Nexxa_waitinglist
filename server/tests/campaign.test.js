@@ -328,3 +328,92 @@ describe('Sau TOP_DEADLINE', () => {
     assert.deepEqual(res.body.pools, ['standard']);
   });
 });
+
+// profile (/me) và /reserve/options cùng trả phase, needsRepick, repickDeadline để frontend
+// hiện đúng thông báo: đang chốt, phải chọn lại trước hạn, hay đã hết hạn.
+describe('phase, needsRepick, repickDeadline trong profile và options', () => {
+  const FINAL = { early: false, topRank: 1500, inTop: false, budget: 50000, pools: ['standard'], finalizedAt: new Date() };
+  const both = async (token) => {
+    const me = await authed(request(app).post('/api/waitlist/me'), token);
+    const opts = await authed(request(app).post('/api/reserve/options'), token);
+    assert.equal(me.status, 200, me.body.error);
+    assert.equal(opts.status, 200, opts.body.error);
+    return [me.body, opts.body];
+  };
+  const pick = (b) => ({ phase: b.phase, needsRepick: b.needsRepick, repickDeadline: b.repickDeadline });
+
+  it('user bình thường trước deadline: open, không cần chọn lại, chưa có hạn chọn lại', async () => {
+    unset();
+    const { token } = (await joinViaApi(request, app, 'a@test.local')).body;
+
+    for (const body of await both(token)) {
+      assert.deepEqual(pick(body), { phase: 'open', needsRepick: false, repickDeadline: null });
+    }
+  });
+
+  it('user đăng ký trước deadline chưa finalize: frozen', async () => {
+    unset();
+    const { token } = (await joinViaApi(request, app, 'a@test.local')).body;
+    await User.updateOne({ email: 'a@test.local' }, { $set: { createdAt: new Date(Date.now() - 2 * HOUR) } });
+    const repick = iso(HOUR);
+    process.env.TOP_DEADLINE = iso(-HOUR);
+    process.env.REPICK_DEADLINE = repick;
+
+    for (const body of await both(token)) {
+      assert.deepEqual(pick(body), { phase: 'frozen', needsRepick: false, repickDeadline: repick });
+    }
+  });
+
+  it('user needsRepick chưa chọn lại: repick + needsRepick; chọn lại xong thì hết needsRepick', async () => {
+    unset();
+    const { token } = (await joinViaApi(request, app, 'a@test.local')).body;
+    await User.updateOne({ email: 'a@test.local' }, { $set: { final: { ...FINAL, needsRepick: true } } });
+    const repick = iso(HOUR);
+    process.env.TOP_DEADLINE = iso(-HOUR);
+    process.env.REPICK_DEADLINE = repick;
+
+    for (const body of await both(token)) {
+      assert.deepEqual(pick(body), { phase: 'repick', needsRepick: true, repickDeadline: repick });
+    }
+
+    const ok = await authed(request(app).post('/api/reserve'), token).send({ tickers: ['PNJ'] });
+    assert.equal(ok.status, 200, ok.body.error);
+    for (const body of await both(token)) {
+      assert.equal(body.needsRepick, false);
+    }
+  });
+
+  it('user needsRepick đã bị tự cắt giỏ thì không còn needsRepick', async () => {
+    unset();
+    const { token } = (await joinViaApi(request, app, 'a@test.local')).body;
+    await User.updateOne(
+      { email: 'a@test.local' },
+      { $set: { final: { ...FINAL, needsRepick: true, autoTrimmedAt: new Date() } } }
+    );
+    process.env.TOP_DEADLINE = iso(-2 * HOUR);
+    process.env.REPICK_DEADLINE = iso(-HOUR);
+
+    for (const body of await both(token)) {
+      assert.equal(body.phase, 'closed');
+      assert.equal(body.needsRepick, false);
+    }
+  });
+
+  it('người đăng ký muộn: repick, không needsRepick', async () => {
+    unset();
+    const repick = iso(HOUR);
+    process.env.TOP_DEADLINE = iso(-HOUR);
+    process.env.REPICK_DEADLINE = repick;
+    const { token } = (await joinViaApi(request, app, 'muon@test.local')).body;
+
+    for (const body of await both(token)) {
+      assert.deepEqual(pick(body), { phase: 'repick', needsRepick: false, repickDeadline: repick });
+    }
+  });
+
+  it('bản xem thử (không token) cũng có đủ ba field', async () => {
+    unset();
+    const res = await request(app).post('/api/reserve/options');
+    assert.deepEqual(pick(res.body), { phase: 'open', needsRepick: false, repickDeadline: null });
+  });
+});

@@ -65,3 +65,22 @@ export function phaseOf(user, now = new Date()) {
   if (repickDeadline && now >= repickDeadline) return 'closed';
   return 'repick';
 }
+
+// Người phải chọn lại mà CHƯA làm: finalize đặt needsRepick, và họ chưa tự chọn lại
+// (repickedAt) cũng chưa bị close-repick cắt giỏ (autoTrimmedAt).
+export function needsRepickOf(user) {
+  const f = user?.final;
+  return Boolean(f?.needsRepick && !f.repickedAt && !f.autoTrimmedAt);
+}
+
+// Ba field về giai đoạn mà profile và /reserve/options cùng trả, để frontend hiện đúng thông
+// báo (đang chốt / phải chọn lại trước hạn / hết hạn) mà không tự suy luật từ đồng hồ máy.
+//   repickDeadline — chuỗi ISO hoặc null khi chưa đặt REPICK_DEADLINE.
+export function phaseInfo(user, now = new Date()) {
+  const { repickDeadline } = getCampaign();
+  return {
+    phase: phaseOf(user, now),
+    needsRepick: needsRepickOf(user),
+    repickDeadline: repickDeadline ? repickDeadline.toISOString() : null
+  };
+}

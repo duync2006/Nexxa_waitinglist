@@ -2,6 +2,7 @@ import { MAX_RESERVE_TICKERS } from '../config/constants.js';
 import { POOL_OF_TICKER, RESERVABLE, RESERVABLE_TICKERS } from '../../shared/catalog.js';
 import { User } from '../models/index.js';
 import { badRequest, locked } from '../utils/app-error.js';
+import { phaseInfo } from '../config/campaign.js';
 import { getEntitlement, previewEntitlement } from './entitlement.service.js';
 import { getPriceTable, requirePrices } from './price.service.js';
 
@@ -29,7 +30,10 @@ async function priceTableFor(user) {
 // Dữ liệu màn hình Reserve cần TRƯỚC khi người dùng chọn: ngân sách, nhóm được phép,
 // và giá từng mã. User null -> bản xem thử.
 export async function getOptions(user) {
-  const entitlement = user ? await getEntitlement(user) : previewEntitlement();
+  const now = new Date();
+  const entitlement = user ? await getEntitlement(user, now) : previewEntitlement(now);
+  // Bản xem thử không có final nên needsRepick luôn false; repickDeadline vẫn trả để biết hạn.
+  const { needsRepick, repickDeadline } = phaseInfo(user, now);
 
   const table = await priceTableFor(user);
   // Chỉ trả giá của những mã user được phép chọn — không rò danh mục ngoài quyền.
@@ -45,6 +49,8 @@ export async function getOptions(user) {
     budget: entitlement.budget,
     pools: entitlement.pools,
     phase: entitlement.phase,
+    needsRepick,
+    repickDeadline,
     preview: !user,
     selected: user?.reservation?.tickers ?? [],
     prices

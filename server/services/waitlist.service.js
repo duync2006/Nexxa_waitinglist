@@ -1,6 +1,6 @@
 import { BOOST, LEADERBOARD_PAGE_SIZE, POINTS_PER_INVITE } from '../config/constants.js';
 import { FIRST_SLOTS, TOTAL_SLOTS, entitlementOf, isEarlyJoin, isTopRank, isVip } from '../../shared/catalog.js';
-import { getCampaign, invitesOpen, isLateRegistrant } from '../config/campaign.js';
+import { getCampaign, invitesOpen, isLateRegistrant, phaseInfo } from '../config/campaign.js';
 import { User, nextJoinIndex } from '../models/index.js';
 import { randomRefCode } from '../utils/codes.js';
 import { maskEmail } from '../utils/mask.js';
@@ -158,6 +158,8 @@ export async function rankOf(user) {
 //               Người đăng ký sau TOP_DEADLINE luôn false — khớp với getEntitlement.
 //   budget    — ngân sách chọn cổ phiếu: First + Top cộng dồn
 //   vip       — early || inTop; server tự quyết, frontend không phải suy lại luật
+//   phase, needsRepick, repickDeadline — xem phaseInfo (campaign.js); frontend dùng để ẩn lời
+//               mời leo hạng sau deadline và nhắc người phải chọn lại giỏ trước hạn.
 export async function toProfile(user) {
   const early = isEarlyJoin(user.joinIndex);
   const rank = await rankOf(user);
@@ -174,7 +176,8 @@ export async function toProfile(user) {
     vip: isVip({ early, inTop }),
     registered: await countUsers(),
     refCode: user.refCode,
-    invites: user.invites
+    invites: user.invites,
+    ...phaseInfo(user)
   };
 }
 
