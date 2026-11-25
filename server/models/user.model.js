@@ -99,5 +99,7 @@ userSchema.index({ score: 1, joinIndex: 1 });
 userSchema.index({ invites: -1, joinIndex: 1 });
 // Phục vụ đếm "đăng ký trong 24h qua" ở /api/stats, gọi lại mỗi 30 giây từ mọi tab đang mở.
 userSchema.index({ createdAt: -1 });
+// Danh sách First 1.000: sắp theo joinIndex giảm dần.
+userSchema.index({ joinIndex: -1 });
 
 export const User = model('User', userSchema);

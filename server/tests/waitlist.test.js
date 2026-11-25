@@ -420,3 +420,55 @@ describe('join() cấp joinIndex', () => {
     assert.equal(user.joinIndex, 7);
   });
 });
+
+describe('POST /api/leaderboard/first', () => {
+  const makeAt = (indexes) =>
+    User.insertMany(
+      indexes.map((n) => ({
+        email: `first${n}@test.local`,
+        refCode: `F${String(n).padStart(5, '0')}`,
+        joinIndex: n,
+        score: n,
+        invites: 0,
+        referrer: null,
+        referredBy: null,
+        referees: [],
+        createdAt: new Date()
+      }))
+    );
+
+  it('chỉ gồm joinIndex <= 1000, sắp giảm dần', async () => {
+    await makeAt([999, 1000, 1001]);
+
+    const res = await request(app).post('/api/leaderboard/first').send({ page: 1 });
+
+    assert.equal(res.status, 200);
+    assert.deepEqual(res.body.rows.map((r) => r.joinIndex), [1000, 999]);
+    assert.equal(res.body.total, 2);
+    assert.equal(res.body.firstRemaining, FIRST_SLOTS - 2);
+    assert.ok(res.body.rows[0].at);
+  });
+
+  it('email được che', async () => {
+    await makeAt([5]);
+
+    const res = await request(app).post('/api/leaderboard/first').send({});
+
+    const [row] = res.body.rows;
+    assert.equal(row.masked, 'fi•••••5@test.local');
+    assert.ok(!row.masked.includes('first5@'));
+    assert.equal(row.email, undefined);
+    assert.deepEqual(Object.keys(row).sort(), ['at', 'joinIndex', 'masked']);
+  });
+
+  it('page vượt quá thì rows rỗng', async () => {
+    await makeAt([1, 2]);
+
+    const res = await request(app).post('/api/leaderboard/first').send({ page: 99 });
+
+    assert.equal(res.status, 200);
+    assert.deepEqual(res.body.rows, []);
+    assert.equal(res.body.page, 99);
+    assert.equal(res.body.total, 2);
+  });
+});

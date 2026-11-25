@@ -9,3 +9,8 @@ export async function getStats(_req, res) {
 export async function getLeaderboard(req, res) {
   res.json(await waitlist.getLeaderboard(Number(req.body?.page) || 1));
 }
+
+// Danh sách First 1.000 công khai, body: { page } (mặc định 1).
+export async function getFirstList(req, res) {
+  res.json(await waitlist.getFirstList(Number(req.body?.page) || 1));
+}

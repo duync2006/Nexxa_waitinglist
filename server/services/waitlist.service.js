@@ -77,6 +77,28 @@ export async function getLeaderboard(page = 1, pageSize = LEADERBOARD_PAGE_SIZE)
   };
 }
 
+// Số suất First còn lại = FIRST_SLOTS trừ số người đã có joinIndex <= FIRST_SLOTS.
+const firstRemainingOf = (early) => Math.max(0, FIRST_SLOTS - early);
+
+// Danh sách First 1.000 công khai: chỉ người có joinIndex <= FIRST_SLOTS, mới nhất trước.
+// Chỉ trả email đã che, joinIndex và thời điểm đăng ký (`at`). page vượt quá thì rows rỗng.
+export async function getFirstList(page = 1, pageSize = LEADERBOARD_PAGE_SIZE) {
+  const p = Number.isInteger(page) && page > 0 ? page : 1;
+  const skip = (p - 1) * pageSize;
+  const [rows, total] = await Promise.all([
+    User.find(EARLY_FILTER).sort({ joinIndex: -1 }).skip(skip).limit(pageSize).select('email joinIndex createdAt').lean(),
+    User.countDocuments(EARLY_FILTER)
+  ]);
+  return {
+    rows: rows.map((u) => ({ joinIndex: u.joinIndex, masked: maskEmail(u.email), at: u.createdAt })),
+    page: p,
+    pageSize,
+    total,
+    totalPages: Math.max(1, Math.ceil(total / pageSize)),
+    firstRemaining: firstRemainingOf(total)
+  };
+}
+
 const isoOrNull = (date) => (date ? date.toISOString() : null);
 
 export async function getStats() {
@@ -92,7 +114,7 @@ export async function getStats() {
     topCutoff()
   ]);
   const { topStart, topDeadline } = getCampaign();
-  const firstRemaining = Math.max(0, FIRST_SLOTS - early);
+  const firstRemaining = firstRemainingOf(early);
   // Top xếp trên toàn bộ user nên chừng nào chưa đủ 1.000 người thì ai đăng ký cũng vào
   // Top. Đủ rồi thì về 0, chỉ còn cách mời bạn để vượt topCutoff.
   const topRemaining = Math.max(0, TOTAL_SLOTS - registered);

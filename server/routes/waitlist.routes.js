@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import * as controller from '../controllers/waitlist.controller.js';
-import { getStats, getLeaderboard } from '../controllers/stats.controller.js';
+import { getStats, getLeaderboard, getFirstList } from '../controllers/stats.controller.js';
 import { requireSession } from '../middlewares/session.middleware.js';
 import { asyncHandler } from '../middlewares/async-handler.js';
 
@@ -10,6 +10,7 @@ export const waitlistRoutes = Router();
 // trong trình duyệt, không phải API — xem referral.routes.js.
 waitlistRoutes.post('/stats', asyncHandler(getStats));
 waitlistRoutes.post('/leaderboard', asyncHandler(getLeaderboard));
+waitlistRoutes.post('/leaderboard/first', asyncHandler(getFirstList));
 waitlistRoutes.post('/waitlist/check', asyncHandler(controller.check));
 waitlistRoutes.post('/waitlist/request-otp', asyncHandler(controller.requestOtp));
 waitlistRoutes.post('/waitlist/verify', asyncHandler(controller.verify));
