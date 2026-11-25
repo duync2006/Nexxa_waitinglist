@@ -37,11 +37,15 @@ const userSchema = new Schema(
     refCode: { type: String, required: true, unique: true },
 
     // Số thứ tự xác thực email, cấp bởi collection counters. Không bao giờ đổi.
-    joinIndex: { type: Number, required: true },
+    // Không `required`: join() tạo user trước rồi mới xin số, để email trùng không tiêu số.
+    // Trong khoảnh khắc đó user chưa có joinIndex nên mọi query xếp hạng/thống kê phải gộp
+    // NUMBERED (xem waitlist.service.js).
+    joinIndex: { type: Number },
 
     // score = joinIndex - BOOST * invites. CŨ: hạng giờ xếp theo invites (điểm), xem
     // RANK_ORDER trong waitlist.service.js. Vẫn giữ field để không xoá dữ liệu cũ.
-    score: { type: Number, required: true },
+    // Cũng được gán sau cùng với joinIndex nên không `required`.
+    score: { type: Number },
 
     invites: { type: Number, required: true, default: 0 },
 

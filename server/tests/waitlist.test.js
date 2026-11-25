@@ -5,6 +5,7 @@ import { createApp } from '../app.js';
 import { MAX_ATTEMPTS } from '../config/constants.js';
 import { Otp, User } from '../models/index.js';
 import { FIRST_SLOTS } from '../../shared/catalog.js';
+import { join } from '../services/waitlist.service.js';
 import { joinViaApi, resetDb, setupDb, teardownDb } from './helpers/db.js';
 
 const app = createApp();
@@ -341,5 +342,14 @@ describe('POST /api/leaderboard', () => {
     assert.ok(!res.body.top.some((r) => r.points === 500));
     assert.equal(som.body.profile.rank, null);
     assert.equal(som.body.profile.vip, true);
+  });
+});
+
+describe('join() cấp joinIndex', () => {
+  it('hai lần join cùng email chạy song song chỉ tiêu một số joinIndex', async () => {
+    await Promise.all([join('dup@test.local'), join('dup@test.local')]);
+    const { user } = await join('next@test.local');
+    assert.equal(user.joinIndex, 2);
+    assert.equal(await User.countDocuments({}), 2);
   });
 });

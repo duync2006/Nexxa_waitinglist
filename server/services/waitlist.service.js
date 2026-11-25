@@ -8,13 +8,18 @@ export const findByEmail = (email) => User.findOne({ email });
 
 export const findByRefCode = (code) => User.findOne({ refCode: String(code || '').toUpperCase() });
 
-export const countUsers = () => User.countDocuments({});
+// User đã được cấp joinIndex. join() tạo user trước rồi mới xin số, nên có một khoảnh khắc
+// ngắn (hoặc mãi mãi nếu process chết giữa chừng) user chưa có số: không được tính vào
+// xếp hạng hay thống kê.
+export const NUMBERED = { joinIndex: { $exists: true } };
+
+export const countUsers = () => User.countDocuments(NUMBERED);
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 // Số người đăng ký trong 24h qua. Chạy trên index { createdAt: -1 }.
 export const countRecent = (since = new Date(Date.now() - DAY_MS)) =>
-  User.countDocuments({ createdAt: { $gte: since } });
+  User.countDocuments({ ...NUMBERED, createdAt: { $gte: since } });
 
 // Bao nhiêu người gần nhất đẩy ra dải chạy ngang. 12 là đủ để dải không lặp lộ liễu trên
 // màn rộng, mà vẫn không biến API công khai thành bản trích danh sách người dùng.
@@ -23,7 +28,7 @@ const RECENT_JOINS = 12;
 // Người đăng ký gần nhất, email đã che. Sắp theo createdAt nên chạy trên index
 // { createdAt: -1 } đã có sẵn cho last24h — không cần thêm index.
 export async function listRecentJoins(limit = RECENT_JOINS) {
-  const users = await User.find({}).sort({ createdAt: -1 }).limit(limit).select('email createdAt').lean();
+  const users = await User.find(NUMBERED).sort({ createdAt: -1 }).limit(limit).select('email createdAt').lean();
   // .select() chỉ lấy đúng hai trường: tránh lỡ tay trả nguyên document ra ngoài sau này.
   return users.map((u) => ({ masked: maskEmail(u.email), at: u.createdAt }));
 }
@@ -38,8 +43,8 @@ export const RANK_ORDER = { invites: -1, joinIndex: 1 };
 
 // Nhóm đua Top 1.000: chỉ người đăng ký từ #FIRST_SLOTS+1. First 1.000 đã chắc VIP nên
 // đứng ngoài cuộc đua — họ không chiếm hạng, không đẩy ngưỡng điểm lên.
-export const RACE_FILTER = { joinIndex: { $gt: FIRST_SLOTS } };
-const EARLY_FILTER = { joinIndex: { $lte: FIRST_SLOTS } };
+export const RACE_FILTER = { ...NUMBERED, joinIndex: { $gt: FIRST_SLOTS } };
+const EARLY_FILTER = { ...NUMBERED, joinIndex: { $lte: FIRST_SLOTS } };
 
 // Bảng xếp hạng công khai của nhóm đua, phân trang. Chỉ trả email đã che.
 // cutoff = điểm của người đứng hạng TOTAL_SLOTS trong nhóm đua (ngưỡng VIP); null khi chưa đủ người.
@@ -144,14 +149,13 @@ export async function join(email, referredByCode) {
   // Tự mời chính mình thì không tính
   const validInviter = inviter && inviter.email !== email ? inviter : null;
 
-  const joinIndex = await nextJoinIndex();
+  // Tạo user TRƯỚC, xin số SAU: hai request cùng email chạy song song thì unique index chặn
+  // cái thứ hai ngay ở bước create, nên không có số nào bị tiêu oan.
   let user;
   try {
     user = await User.create({
       email,
       refCode: await uniqueRefCode(),
-      joinIndex,
-      score: joinIndex,
       invites: 0,
       referrer: validInviter ? validInviter._id : null,
       referredBy: validInviter ? validInviter.refCode : null,
@@ -159,7 +163,6 @@ export async function join(email, referredByCode) {
       createdAt: new Date()
     });
   } catch (err) {
-    // Hai request cùng email chạy song song: unique index chặn cái thứ hai.
     if (err.code === 11000) {
       const dup = await findByEmail(email);
       if (dup) return { user: dup, created: false };
@@ -167,8 +170,20 @@ export async function join(email, referredByCode) {
     throw err;
   }
 
-  // Cộng điểm cho người mời: +1 lượt mời (= +10 điểm), ghi _id người được mời. score cũ
-  // vẫn được cập nhật để dữ liệu nhất quán, dù không còn dùng để xếp hạng.
+  try {
+    const joinIndex = await nextJoinIndex();
+    // score = joinIndex như cũ; field cũ nhưng vẫn ghi để dữ liệu nhất quán.
+    await User.updateOne({ _id: user._id }, { $set: { joinIndex, score: joinIndex } });
+    user.joinIndex = joinIndex;
+    user.score = joinIndex;
+  } catch (err) {
+    // Không để lại user mồ côi không có số: xoá đi để người dùng đăng ký lại được.
+    await User.deleteOne({ _id: user._id });
+    throw err;
+  }
+
+  // Chỉ cộng lượt mời cho người mời SAU khi người được mời đã có số. +1 lượt mời
+  // (= +10 điểm), ghi _id người được mời; score cũ vẫn cập nhật cho nhất quán.
   // Cả ba nằm trong MỘT lệnh update nên invites và referees không bao giờ lệch nhau.
   if (user.referrer) {
     await User.updateOne(
