@@ -1,7 +1,7 @@
 import { after, afterEach, before, beforeEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { User } from '../models/index.js';
-import { basketFits, finalizeTop } from '../services/finalize.service.js';
+import { basketFits, closeRepick, finalizeTop, trimBasket } from '../services/finalize.service.js';
 import { resetDb, seedPrices, setupDb, teardownDb } from './helpers/db.js';
 
 before(setupDb);
@@ -206,5 +206,128 @@ describe('finalizeTop', () => {
     assert.equal(r.needsRepick, 3);
     assert.deepEqual(r.mailFailed, ['u1002@test.local']);
     assert.deepEqual(sent.sort(), ['u1001@test.local', 'u1003@test.local']);
+  });
+});
+
+describe('trimBasket', () => {
+  const std = { budget: 50000, pools: ['standard'] };
+  it('cắt giữ đúng thứ tự, không vượt 50.000đ, bỏ mã VIP', () => {
+    assert.deepEqual(trimBasket(['VCB', 'PLX', 'TPB', 'REE'], () => 20000, std), ['PLX', 'TPB']);
+  });
+  it('mã không có giá thì bị loại, mã sau vẫn được xét', () => {
+    const priceOf = (t) => (t === 'PLX' ? undefined : 20000);
+    assert.deepEqual(trimBasket(['PLX', 'TPB'], priceOf, std), ['TPB']);
+  });
+  it('mã vượt ngân sách bị bỏ nhưng đi tiếp xét mã rẻ hơn phía sau', () => {
+    const priceOf = (t) => (t === 'PLX' ? 60000 : 20000);
+    assert.deepEqual(trimBasket(['PLX', 'TPB'], priceOf, std), ['TPB']);
+  });
+});
+
+describe('closeRepick', () => {
+  const setDeadlines = () => {
+    process.env.TOP_DEADLINE = new Date(Date.now() - 3 * HOUR).toISOString();
+    process.env.REPICK_DEADLINE = new Date(Date.now() - HOUR).toISOString();
+  };
+  const finalOf = (extra = {}) => ({
+    early: false, topRank: 1001, inTop: false, budget: 50000, pools: ['standard'],
+    finalizedAt: PAST, needsRepick: true, ...extra
+  });
+  const repickUser = (j, tickers, lockedPrices, extra = {}) => ({
+    reservation: { tickers, lockedPrices },
+    final: finalOf(extra)
+  });
+
+  it('cắt giữ đúng thứ tự, ghi totalValue và autoTrimmedAt', async () => {
+    setDeadlines();
+    await seed(1, () => 0, (j) => repickUser(j, ['VCB', 'PLX', 'TPB', 'REE'], [
+      { ticker: 'VCB', price: 20000 }, { ticker: 'PLX', price: 20000 },
+      { ticker: 'TPB', price: 20000 }, { ticker: 'REE', price: 20000 }
+    ]));
+    const r = await closeRepick();
+    const u = await byJoin(1);
+
+    assert.equal(r.trimmed, 1);
+    assert.equal(r.emptied, 0);
+    assert.deepEqual(u.reservation.tickers, ['PLX', 'TPB']);
+    assert.equal(u.reservation.totalValue, 40000);
+    assert.ok(u.final.autoTrimmedAt);
+    assert.equal(u.reservation.lockedPrices.length, 4);
+  });
+
+  it('mã không có giá ở cả lockedPrices lẫn snapshot thì bị loại', async () => {
+    setDeadlines();
+    await seed(1, () => 0, (j) => repickUser(j, ['ZZZZ', 'PLX'], [{ ticker: 'PLX', price: 20000 }]));
+    await closeRepick();
+    assert.deepEqual((await byJoin(1)).reservation.tickers, ['PLX']);
+  });
+
+  it('mã thiếu trong lockedPrices được bổ sung giá snapshot', async () => {
+    setDeadlines();
+    await seed(1, () => 0, (j) => repickUser(j, ['PLX', 'TPB'], [{ ticker: 'PLX', price: 10000 }]));
+    await closeRepick();
+    const u = await byJoin(1);
+    assert.deepEqual(u.reservation.tickers, ['PLX', 'TPB']);
+    assert.equal(u.reservation.totalValue, 30000); // 10k (khoá) + 20k (snapshot)
+    assert.deepEqual(u.reservation.lockedPrices.map((p) => p.ticker).sort(), ['PLX', 'TPB']);
+  });
+
+  it('giỏ cắt xong rỗng thì tính vào emptied và liệt kê email', async () => {
+    setDeadlines();
+    await seed(1, () => 0, (j) => repickUser(j, ['VCB'], [{ ticker: 'VCB', price: 20000 }]));
+    const r = await closeRepick();
+    const u = await byJoin(1);
+
+    assert.equal(r.trimmed, 1);
+    assert.equal(r.emptied, 1);
+    assert.deepEqual(r.emptiedEmails, ['u1@test.local']);
+    assert.deepEqual(u.reservation.tickers, []);
+    assert.equal(u.reservation.totalValue, 0);
+  });
+
+  it('người đã repickedAt thì không bị cắt', async () => {
+    setDeadlines();
+    await seed(1, () => 0, (j) => repickUser(j, ['VCB', 'PLX'], [
+      { ticker: 'VCB', price: 20000 }, { ticker: 'PLX', price: 20000 }
+    ], { repickedAt: PAST }));
+    const r = await closeRepick();
+    const u = await byJoin(1);
+
+    assert.equal(r.trimmed, 0);
+    assert.deepEqual(u.reservation.tickers, ['VCB', 'PLX']);
+    assert.ok(!u.final.autoTrimmedAt);
+  });
+
+  it('người không needsRepick thì không bị cắt', async () => {
+    setDeadlines();
+    await seed(1, () => 0, (j) => repickUser(j, ['PLX'], [{ ticker: 'PLX', price: 20000 }], { needsRepick: false }));
+    const r = await closeRepick();
+    assert.equal(r.trimmed, 0);
+    assert.ok(!(await byJoin(1)).final.autoTrimmedAt);
+  });
+
+  it('chạy lại lần hai không cắt lần nữa', async () => {
+    setDeadlines();
+    await seed(1, () => 0, (j) => repickUser(j, ['VCB', 'PLX'], [
+      { ticker: 'VCB', price: 20000 }, { ticker: 'PLX', price: 20000 }
+    ]));
+    await closeRepick();
+    const before = await byJoin(1);
+    const r = await closeRepick();
+
+    assert.equal(r.trimmed, 0);
+    assert.deepEqual(await byJoin(1), before);
+  });
+
+  it('trước REPICK_DEADLINE thì ném lỗi', async () => {
+    process.env.TOP_DEADLINE = new Date(Date.now() - 3 * HOUR).toISOString();
+    process.env.REPICK_DEADLINE = new Date(Date.now() + HOUR).toISOString();
+    await assert.rejects(() => closeRepick(), /Chưa tới REPICK_DEADLINE/);
+  });
+
+  it('không có REPICK_DEADLINE thì ném lỗi', async () => {
+    delete process.env.TOP_DEADLINE;
+    delete process.env.REPICK_DEADLINE;
+    await assert.rejects(() => closeRepick(), /Chưa tới REPICK_DEADLINE/);
   });
 });

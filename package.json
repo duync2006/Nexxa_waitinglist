@@ -12,6 +12,7 @@
     "test": "node --env-file=.env.test --test --test-concurrency=1 \"server/tests/**/*.test.js\"",
     "migrate": "node --env-file-if-exists=.env server/scripts/migrate-json-to-mongo.js",
     "finalize": "node --env-file-if-exists=.env server/scripts/finalize-top.js",
+    "close-repick": "node --env-file-if-exists=.env server/scripts/close-repick.js",
     "backfill": "node --env-file-if-exists=.env server/scripts/backfill-referrals.js",
     "prices": "node --env-file-if-exists=.env server/scripts/update-prices.js",
     "prices:names": "node --env-file-if-exists=.env server/scripts/updateFriendlyName.js",

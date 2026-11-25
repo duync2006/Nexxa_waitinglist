@@ -18,6 +18,12 @@ export function basketFits(tickers, priceOf, { budget, pools }) {
   return total <= budget;
 }
 
+// Giá của một mã cho user: giá đã khoá trong giỏ trước, thiếu thì lấy snapshot.
+function priceOfUser(user, prices) {
+  const locked = Object.fromEntries((user.reservation?.lockedPrices ?? []).map((p) => [p.ticker, p.price]));
+  return (t) => locked[t] ?? prices[t];
+}
+
 const BATCH = 500;
 
 // Chốt Top 1.000 sau TOP_DEADLINE. Idempotent: user đã có `final` bị bỏ qua (nhưng vẫn chiếm
@@ -71,8 +77,7 @@ export async function finalizeTop(now = new Date(), { notify = sendRepickEmail }
     const inTop = position <= TOTAL_SLOTS;
     const { budget, pools } = entitlementOf({ early, inTop });
 
-    const locked = Object.fromEntries((u.reservation?.lockedPrices ?? []).map((p) => [p.ticker, p.price]));
-    const priceOf = (t) => locked[t] ?? prices[t];
+    const priceOf = priceOfUser(u, prices);
     const tickers = u.reservation?.tickers ?? [];
     const needsRepick = !basketFits(tickers, priceOf, { budget, pools });
 
@@ -89,6 +94,84 @@ export async function finalizeTop(now = new Date(), { notify = sendRepickEmail }
     if (inTop) result.top += 1;
     if (early && inTop) result.both += 1;
 
+    if (ops.length >= BATCH) await flush();
+  }
+  await flush();
+  return result;
+}
+
+// Cắt giỏ theo đúng thứ tự đã chọn: giữ mã thuộc pools, có giá và cộng thêm vẫn <= budget.
+// Mã không giữ được thì bỏ và đi tiếp xét mã sau (một mã đắt không chặn mã rẻ hơn phía sau).
+export function trimBasket(tickers, priceOf, { budget, pools }) {
+  const kept = [];
+  let total = 0;
+  for (const t of tickers) {
+    if (!pools.includes(POOL_OF_TICKER[t])) continue;
+    const price = priceOf(t);
+    if (typeof price !== 'number') continue;
+    if (total + price > budget) continue;
+    total += price;
+    kept.push(t);
+  }
+  return kept;
+}
+
+// Sau REPICK_DEADLINE: tự cắt giỏ của người cần chọn lại mà không chọn lại.
+// Idempotent: chỉ xử lý user chưa repickedAt và chưa autoTrimmedAt.
+export async function closeRepick(now = new Date()) {
+  const { repickDeadline } = getCampaign();
+  if (!repickDeadline || now < repickDeadline) throw new Error('Chưa tới REPICK_DEADLINE');
+
+  const prices = await getPriceTable();
+  const result = { trimmed: 0, emptied: 0, emptiedEmails: [] };
+  const cursor = User.find({
+    'final.needsRepick': true,
+    'final.repickedAt': { $exists: false },
+    'final.autoTrimmedAt': { $exists: false }
+  })
+    .select('email final reservation')
+    .lean()
+    .cursor();
+
+  let ops = [];
+  const flush = async () => {
+    if (!ops.length) return;
+    await User.bulkWrite(ops, { ordered: false });
+    ops = [];
+  };
+
+  for await (const u of cursor) {
+    const priceOf = priceOfUser(u, prices);
+    const kept = trimBasket(u.reservation?.tickers ?? [], priceOf, u.final);
+    const totalValue = kept.reduce((sum, t) => sum + priceOf(t), 0);
+    // Mọi mã giữ lại phải có giá khoá: bổ sung giá snapshot cho mã chưa có trong lockedPrices.
+    const lockedPrices = u.reservation?.lockedPrices ?? [];
+    const have = new Set(lockedPrices.map((p) => p.ticker));
+    const added = kept.filter((t) => !have.has(t)).map((ticker) => ({ ticker, price: priceOf(ticker) }));
+
+    const $set = {
+      'reservation.tickers': kept,
+      'reservation.totalValue': totalValue,
+      'reservation.updatedAt': now,
+      'final.autoTrimmedAt': now
+    };
+    if (added.length) $set['reservation.lockedPrices'] = [...lockedPrices, ...added];
+    ops.push({
+      // Điều kiện lặp lại để một lần chọn lại xen vào giữa không bị ghi đè.
+      updateOne: {
+        filter: {
+          _id: u._id,
+          'final.repickedAt': { $exists: false },
+          'final.autoTrimmedAt': { $exists: false }
+        },
+        update: { $set }
+      }
+    });
+    result.trimmed += 1;
+    if (!kept.length) {
+      result.emptied += 1;
+      result.emptiedEmails.push(u.email);
+    }
     if (ops.length >= BATCH) await flush();
   }
   await flush();
