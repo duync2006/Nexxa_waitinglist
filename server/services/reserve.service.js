@@ -1,10 +1,9 @@
 import { MAX_RESERVE_TICKERS } from '../config/constants.js';
 import { POOL_OF_TICKER, RESERVABLE, RESERVABLE_TICKERS } from '../../shared/catalog.js';
 import { User } from '../models/index.js';
-import { badRequest, forbidden } from '../utils/app-error.js';
+import { badRequest } from '../utils/app-error.js';
 import { getEntitlement, previewEntitlement } from './entitlement.service.js';
 import { getPriceTable, requirePrices } from './price.service.js';
-import { findByEmail } from './waitlist.service.js';
 
 const vnd = (n) => Number(n).toLocaleString('vi-VN') + 'đ';
 
@@ -28,9 +27,8 @@ async function priceTableFor(user) {
 }
 
 // Dữ liệu màn hình Reserve cần TRƯỚC khi người dùng chọn: ngân sách, nhóm được phép,
-// và giá từng mã. Email rỗng -> bản xem thử.
-export async function getOptions(email) {
-  const user = email ? await findByEmail(email) : null;
+// và giá từng mã. User null -> bản xem thử.
+export async function getOptions(user) {
   const entitlement = user ? await getEntitlement(user) : previewEntitlement();
 
   const table = await priceTableFor(user);
@@ -61,13 +59,8 @@ function lockedPricesAfter(user, prices) {
   return out;
 }
 
-// Chỉ email đã xác thực waitlist mới được ghi nhận lựa chọn. Chọn lại thì ghi đè.
-export async function saveSelection(email, rawTickers) {
-  const user = await findByEmail(email);
-  if (!user) {
-    throw forbidden('Email này chưa tham gia waitlist. Vui lòng đăng ký trước khi nhận quà.');
-  }
-
+// User đã được xác thực bằng token phiên. Chọn lại thì ghi đè.
+export async function saveSelection(user, rawTickers) {
   const tickers = normalize(rawTickers);
 
   if (tickers.length === 0 || tickers.length > MAX_RESERVE_TICKERS) {
@@ -115,6 +108,6 @@ export async function saveSelection(email, rawTickers) {
     totalValue
   };
 
-  await User.updateOne({ email }, { $set: { reservation } });
+  await User.updateOne({ _id: user._id }, { $set: { reservation } });
   return { tickers, totalValue, budget: entitlement.budget };
 }

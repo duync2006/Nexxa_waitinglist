@@ -5,7 +5,8 @@ import { createApp } from '../app.js';
 import { Price, User } from '../models/index.js';
 import { FIRST_SLOTS, RESERVABLE, TOTAL_SLOTS, groupTypeOfTicker } from '../../shared/catalog.js';
 import { checkBudgetFeasibility, getPriceTable, refreshPrices } from '../services/price.service.js';
-import { resetDb, seedPrices, setupDb, teardownDb } from './helpers/db.js';
+import { createSession } from '../services/session.service.js';
+import { authed, resetDb, seedPrices, setupDb, teardownDb } from './helpers/db.js';
 
 const app = createApp();
 
@@ -47,7 +48,11 @@ async function userAtRank(rank) {
   return me.email;
 }
 
-const options = (email) => request(app).post('/api/reserve/options').send({ email });
+// Cấp token phiên cho user tạo thẳng trong DB rồi gọi API bằng token đó.
+const tokenOf = async (email) => createSession((await User.findOne({ email }))._id);
+const options = async (email) => authed(request(app).post('/api/reserve/options'), await tokenOf(email));
+const reserve = async (email, tickers) =>
+  authed(request(app).post('/api/reserve'), await tokenOf(email)).send({ tickers });
 
 describe('POST /api/reserve/options', () => {
   it(`hạng ${TOTAL_SLOTS} được 100.000đ và cả hai nhóm`, async () => {
@@ -114,8 +119,8 @@ describe('POST /api/reserve/options', () => {
     assert.equal(res.body.budget, 100000);
   });
 
-  it('email rỗng thì trả bản xem thử với mức cao nhất', async () => {
-    const res = await options('');
+  it('không token thì trả bản xem thử với mức cao nhất', async () => {
+    const res = await request(app).post('/api/reserve/options').send({});
 
     assert.equal(res.body.preview, true);
     assert.equal(res.body.rank, null);
@@ -123,8 +128,8 @@ describe('POST /api/reserve/options', () => {
     assert.deepEqual(res.body.pools, ['vip', 'standard']);
   });
 
-  it('email chưa đăng ký cũng chỉ là bản xem thử, không phải lỗi', async () => {
-    const res = await options('nguoi-la@test.local');
+  it('token sai cũng chỉ là bản xem thử, không phải lỗi', async () => {
+    const res = await authed(request(app).post('/api/reserve/options'), 'token-gia');
 
     assert.equal(res.status, 200);
     assert.equal(res.body.preview, true);
@@ -132,7 +137,7 @@ describe('POST /api/reserve/options', () => {
 
   it('trả lại lựa chọn đã ghi nhận để sửa', async () => {
     const email = await userAtRank(5);
-    await request(app).post('/api/reserve').send({ email, tickers: ['VCB'] });
+    await reserve(email, ['VCB']);
 
     const res = await options(email);
 
@@ -143,7 +148,7 @@ describe('POST /api/reserve/options', () => {
 describe('Chốt quyền lợi ở lần Reserve đầu tiên', () => {
   it('hạng trôi xuống quá 1.000 vẫn giữ ngân sách và nhóm đã chốt', async () => {
     const email = await userAtRank(3);
-    const first = await request(app).post('/api/reserve').send({ email, tickers: ['VCB'] });
+    const first = await reserve(email, ['VCB']);
     assert.equal(first.status, 200);
     assert.equal(first.body.budget, 100000);
 
@@ -160,10 +165,10 @@ describe('Chốt quyền lợi ở lần Reserve đầu tiên', () => {
 
   it('vẫn chọn được mã VIP sau khi hạng đã trôi', async () => {
     const email = await userAtRank(3);
-    await request(app).post('/api/reserve').send({ email, tickers: ['VCB'] });
+    await reserve(email, ['VCB']);
     await makeUsers(1200, { startIndex: 10000, invites: 1 });
 
-    const res = await request(app).post('/api/reserve').send({ email, tickers: ['FPT', 'HPG'] });
+    const res = await reserve(email, ['FPT', 'HPG']);
 
     assert.equal(res.status, 200);
     assert.deepEqual(res.body.tickers, ['FPT', 'HPG']);
@@ -171,12 +176,12 @@ describe('Chốt quyền lợi ở lần Reserve đầu tiên', () => {
 
   it('giá đã chốt được giữ nguyên dù snapshot đổi', async () => {
     const email = await userAtRank(3);
-    await request(app).post('/api/reserve').send({ email, tickers: ['VCB'] });
+    await reserve(email, ['VCB']);
 
     // Giá VCB tăng vọt sau khi đã chốt
     await Price.updateOne({ _id: 'VCB' }, { $set: { price: 95000 } });
 
-    const res = await request(app).post('/api/reserve').send({ email, tickers: ['VCB', 'FPT'] });
+    const res = await reserve(email, ['VCB', 'FPT']);
 
     assert.equal(res.status, 200, res.body.error);
     assert.equal(res.body.totalValue, 40000, 'phải dùng giá đã đông cứng, không phải giá mới');
@@ -187,7 +192,7 @@ describe('Ngân sách và nhóm khi Reserve', () => {
   it('tổng vượt ngân sách thì 400 kèm con số', async () => {
     const email = await userAtRank(TOTAL_SLOTS + 1); // ngân sách 50.000đ, mỗi mã 20.000đ
 
-    const res = await request(app).post('/api/reserve').send({ email, tickers: ['PNJ', 'PLX', 'TPB'] });
+    const res = await reserve(email, ['PNJ', 'PLX', 'TPB']);
 
     assert.equal(res.status, 400);
     assert.match(res.body.error, /vượt ngân sách/);
@@ -198,7 +203,7 @@ describe('Ngân sách và nhóm khi Reserve', () => {
   it('bậc Standard chọn mã VIP thì 400 và nêu đích danh mã', async () => {
     const email = await userAtRank(TOTAL_SLOTS + 1);
 
-    const res = await request(app).post('/api/reserve').send({ email, tickers: ['PNJ', 'VCB'] });
+    const res = await reserve(email, ['PNJ', 'VCB']);
 
     assert.equal(res.status, 400);
     assert.deepEqual(res.body.wrongPool, ['VCB']);
@@ -209,7 +214,7 @@ describe('Ngân sách và nhóm khi Reserve', () => {
     const email = await userAtRank(5);
     await Price.deleteOne({ _id: 'FPT' });
 
-    const res = await request(app).post('/api/reserve').send({ email, tickers: ['VCB', 'FPT'] });
+    const res = await reserve(email, ['VCB', 'FPT']);
 
     assert.equal(res.status, 503);
     assert.deepEqual(res.body.missing, ['FPT']);
@@ -218,7 +223,7 @@ describe('Ngân sách và nhóm khi Reserve', () => {
   it('reservation lưu lại đủ phần đã chốt', async () => {
     const email = await userAtRank(5);
 
-    await request(app).post('/api/reserve').send({ email, tickers: ['VCB', 'FPT'] });
+    await reserve(email, ['VCB', 'FPT']);
 
     const saved = await User.findOne({ email }).lean();
     assert.equal(saved.reservation.lockedRank, 5);
