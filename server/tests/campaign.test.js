@@ -1,0 +1,256 @@
+import { after, afterEach, before, beforeEach, describe, it } from 'node:test';
+import assert from 'node:assert/strict';
+import request from 'supertest';
+import { createApp } from '../app.js';
+import { User } from '../models/index.js';
+import { getCampaign, invitesOpen, phaseOf } from '../config/campaign.js';
+import { authed, joinViaApi, resetDb, seedPrices, setupDb, teardownDb } from './helpers/db.js';
+
+const app = createApp();
+
+before(setupDb);
+after(teardownDb);
+beforeEach(async () => {
+  await resetDb();
+  await seedPrices();
+});
+
+// campaign.js đọc process.env ở MỖI lần gọi, nên từng ca tự đặt biến rồi trả lại như cũ.
+const VARS = ['TOP_START', 'TOP_DEADLINE', 'REPICK_DEADLINE'];
+const saved = Object.fromEntries(VARS.map((k) => [k, process.env[k]]));
+afterEach(() => {
+  for (const k of VARS) {
+    if (saved[k] === undefined) delete process.env[k];
+    else process.env[k] = saved[k];
+  }
+});
+
+const HOUR = 60 * 60 * 1000;
+const iso = (ms) => new Date(Date.now() + ms).toISOString();
+const unset = () => VARS.forEach((k) => delete process.env[k]);
+
+describe('Đồng hồ campaign', () => {
+  it('thiếu TOP_DEADLINE thì phase open', () => {
+    unset();
+
+    assert.deepEqual(getCampaign(), { topStart: null, topDeadline: null, repickDeadline: null });
+    assert.equal(phaseOf(null), 'open');
+    assert.equal(phaseOf({ final: { budget: 100000 } }), 'open');
+    assert.equal(invitesOpen(), true);
+  });
+
+  it('trước TOP_DEADLINE thì open và còn cộng lượt mời', () => {
+    unset();
+    process.env.TOP_DEADLINE = iso(HOUR);
+
+    assert.equal(phaseOf({}), 'open');
+    assert.equal(invitesOpen(), true);
+  });
+
+  it('sau deadline chưa finalize thì frozen', () => {
+    unset();
+    process.env.TOP_DEADLINE = iso(-HOUR);
+    process.env.REPICK_DEADLINE = iso(HOUR);
+
+    assert.equal(phaseOf({}), 'frozen');
+    assert.equal(phaseOf(null), 'frozen');
+    assert.equal(invitesOpen(), false);
+  });
+
+  it('có final và trước REPICK_DEADLINE thì repick', () => {
+    unset();
+    process.env.TOP_DEADLINE = iso(-HOUR);
+    process.env.REPICK_DEADLINE = iso(HOUR);
+
+    assert.equal(phaseOf({ final: { budget: 50000 } }), 'repick');
+  });
+
+  it('có final mà không có REPICK_DEADLINE thì vẫn repick', () => {
+    unset();
+    process.env.TOP_DEADLINE = iso(-HOUR);
+
+    assert.equal(phaseOf({ final: { budget: 50000 } }), 'repick');
+  });
+
+  it('sau REPICK_DEADLINE thì closed', () => {
+    unset();
+    process.env.TOP_DEADLINE = iso(-2 * HOUR);
+    process.env.REPICK_DEADLINE = iso(-HOUR);
+
+    assert.equal(phaseOf({ final: { budget: 50000 } }), 'closed');
+    // Chưa finalize thì vẫn là frozen, kể cả khi đã qua REPICK_DEADLINE.
+    assert.equal(phaseOf({}), 'frozen');
+  });
+
+  it('nhận tham số now thay cho giờ hiện tại', () => {
+    unset();
+    process.env.TOP_DEADLINE = '2027-01-01T00:00:00+07:00';
+    process.env.REPICK_DEADLINE = '2027-01-08T00:00:00+07:00';
+    const user = { final: { budget: 100000 } };
+
+    assert.equal(phaseOf(user, new Date('2026-12-31T16:59:59Z')), 'open');
+    assert.equal(phaseOf(user, new Date('2026-12-31T17:00:00Z')), 'repick');
+    assert.equal(phaseOf(user, new Date('2027-01-07T17:00:00Z')), 'closed');
+    assert.equal(invitesOpen(new Date('2026-12-31T17:00:00Z')), false);
+  });
+
+  it('REPICK_DEADLINE trước TOP_DEADLINE thì getCampaign ném lỗi', () => {
+    unset();
+    process.env.TOP_DEADLINE = '2027-01-08T00:00:00+07:00';
+    process.env.REPICK_DEADLINE = '2027-01-01T00:00:00+07:00';
+
+    assert.throws(() => getCampaign(), /REPICK_DEADLINE phải sau TOP_DEADLINE/);
+  });
+
+  it('REPICK_DEADLINE bằng TOP_DEADLINE cũng ném lỗi', () => {
+    unset();
+    process.env.TOP_DEADLINE = '2027-01-01T00:00:00+07:00';
+    process.env.REPICK_DEADLINE = '2027-01-01T00:00:00+07:00';
+
+    assert.throws(() => getCampaign(), /REPICK_DEADLINE phải sau TOP_DEADLINE/);
+  });
+
+  it('có REPICK_DEADLINE mà thiếu TOP_DEADLINE thì ném lỗi', () => {
+    unset();
+    process.env.REPICK_DEADLINE = '2027-01-01T00:00:00+07:00';
+
+    assert.throws(() => getCampaign(), /TOP_DEADLINE/);
+  });
+
+  it('ngày sai định dạng thì ném lỗi nêu tên biến', () => {
+    unset();
+    process.env.TOP_DEADLINE = 'thứ hai tuần sau';
+    assert.throws(() => getCampaign(), /^Error: TOP_DEADLINE không phải ngày hợp lệ: thứ hai tuần sau/);
+
+    unset();
+    process.env.TOP_START = '2027-13-45';
+    assert.throws(() => getCampaign(), /TOP_START không phải ngày hợp lệ/);
+  });
+
+  it('ngày thiếu múi giờ thì ném lỗi, tránh lệch theo giờ máy chủ', () => {
+    unset();
+    process.env.TOP_DEADLINE = '2027-01-01T00:00:00';
+
+    assert.throws(() => getCampaign(), /TOP_DEADLINE không phải ngày hợp lệ/);
+  });
+
+  it('trả Date cho cả ba mốc', () => {
+    unset();
+    process.env.TOP_START = '2026-12-01T00:00:00+07:00';
+    process.env.TOP_DEADLINE = '2027-01-01T00:00:00+07:00';
+    process.env.REPICK_DEADLINE = '2027-01-08T00:00:00Z';
+
+    const c = getCampaign();
+
+    assert.equal(c.topStart.toISOString(), '2026-11-30T17:00:00.000Z');
+    assert.equal(c.topDeadline.toISOString(), '2026-12-31T17:00:00.000Z');
+    assert.equal(c.repickDeadline.toISOString(), '2027-01-08T00:00:00.000Z');
+  });
+});
+
+describe('Sau TOP_DEADLINE', () => {
+  it('sau deadline join qua ref không cộng invites nhưng vẫn lưu referrer', async () => {
+    unset();
+    const inviter = await joinViaApi(request, app, 'inviter@test.local');
+    process.env.TOP_DEADLINE = iso(-HOUR);
+
+    const res = await joinViaApi(request, app, 'moi@test.local', inviter.body.profile.refCode);
+
+    assert.equal(res.status, 200);
+    const a = await User.findOne({ email: 'inviter@test.local' });
+    const b = await User.findOne({ email: 'moi@test.local' });
+    assert.equal(a.invites, 0);
+    assert.equal(a.score, a.joinIndex, 'score cũng không được cộng');
+    assert.deepEqual(a.referees.map(String), [String(b._id)]);
+    assert.equal(String(b.referrer), String(a._id));
+    assert.equal(b.referredBy, a.refCode);
+  });
+
+  it('reserve khi frozen thì 423', async () => {
+    unset();
+    const { token } = (await joinViaApi(request, app, 'a@test.local')).body;
+    process.env.TOP_DEADLINE = iso(-HOUR);
+
+    const res = await authed(request(app).post('/api/reserve'), token).send({ tickers: ['VCB'] });
+
+    assert.equal(res.status, 423);
+    assert.equal(res.body.error, 'Đang chốt kết quả Top 1.000. Vui lòng quay lại sau.');
+    const saved = await User.findOne({ email: 'a@test.local' }).lean();
+    assert.equal(saved.reservation, undefined);
+  });
+
+  it('reserve khi closed thì 423', async () => {
+    unset();
+    const { token } = (await joinViaApi(request, app, 'a@test.local')).body;
+    await User.updateOne(
+      { email: 'a@test.local' },
+      { $set: { final: { early: true, topRank: 1, inTop: true, budget: 200000, pools: ['vip', 'standard'], finalizedAt: new Date(), needsRepick: false } } }
+    );
+    process.env.TOP_DEADLINE = iso(-2 * HOUR);
+    process.env.REPICK_DEADLINE = iso(-HOUR);
+
+    const res = await authed(request(app).post('/api/reserve'), token).send({ tickers: ['VCB'] });
+
+    assert.equal(res.status, 423);
+    assert.equal(res.body.error, 'Đã hết hạn chọn cổ phiếu.');
+  });
+
+  it('giai đoạn repick dùng quyền lợi đã chốt và ghi final.repickedAt', async () => {
+    unset();
+    const { token } = (await joinViaApi(request, app, 'a@test.local')).body;
+    // Quyền lợi chốt khác hẳn quyền lợi tính theo hạng hiện tại (First + Top = 200.000đ).
+    await User.updateOne(
+      { email: 'a@test.local' },
+      { $set: { final: { early: false, topRank: 1500, inTop: false, budget: 50000, pools: ['standard'], finalizedAt: new Date(), needsRepick: true } } }
+    );
+    process.env.TOP_DEADLINE = iso(-HOUR);
+    process.env.REPICK_DEADLINE = iso(HOUR);
+
+    const vip = await authed(request(app).post('/api/reserve'), token).send({ tickers: ['VCB'] });
+    assert.equal(vip.status, 400);
+    assert.deepEqual(vip.body.wrongPool, ['VCB']);
+
+    const ok = await authed(request(app).post('/api/reserve'), token).send({ tickers: ['PNJ', 'PLX'] });
+    assert.equal(ok.status, 200, ok.body.error);
+    assert.equal(ok.body.budget, 50000);
+
+    const saved = await User.findOne({ email: 'a@test.local' }).lean();
+    assert.deepEqual(saved.reservation.tickers, ['PNJ', 'PLX']);
+    assert.ok(saved.final.repickedAt instanceof Date);
+    assert.equal(saved.final.budget, 50000, 'ghi giỏ không được làm mất phần đã chốt');
+  });
+
+  it('người không cần chọn lại thì không bị ghi repickedAt', async () => {
+    unset();
+    const { token } = (await joinViaApi(request, app, 'a@test.local')).body;
+    await User.updateOne(
+      { email: 'a@test.local' },
+      { $set: { final: { early: true, topRank: 1, inTop: true, budget: 200000, pools: ['vip', 'standard'], finalizedAt: new Date(), needsRepick: false } } }
+    );
+    process.env.TOP_DEADLINE = iso(-HOUR);
+
+    const res = await authed(request(app).post('/api/reserve'), token).send({ tickers: ['VCB'] });
+
+    assert.equal(res.status, 200, res.body.error);
+    const saved = await User.findOne({ email: 'a@test.local' }).lean();
+    assert.equal(saved.final.repickedAt, undefined);
+  });
+
+  it('options trả phase và quyền lợi đã chốt', async () => {
+    unset();
+    const { token } = (await joinViaApi(request, app, 'a@test.local')).body;
+    await User.updateOne(
+      { email: 'a@test.local' },
+      { $set: { final: { early: false, topRank: 1500, inTop: false, budget: 50000, pools: ['standard'], finalizedAt: new Date(), needsRepick: true } } }
+    );
+    process.env.TOP_DEADLINE = iso(-HOUR);
+
+    const res = await authed(request(app).post('/api/reserve/options'), token);
+
+    assert.equal(res.body.phase, 'repick');
+    assert.equal(res.body.inTop, false);
+    assert.equal(res.body.rank, 1500);
+    assert.equal(res.body.budget, 50000);
+    assert.deepEqual(res.body.pools, ['standard']);
+  });
+});

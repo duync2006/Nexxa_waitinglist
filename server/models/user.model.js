@@ -11,20 +11,41 @@ const reservationSchema = new Schema(
     tickers: { type: [String], default: [] },
     updatedAt: { type: Date },
 
-    // Phần dưới được chốt ở lần Reserve ĐẦU TIÊN và không bao giờ đổi, kể cả khi hạng
-    // của user trôi về sau. Thiếu `budget` nghĩa là chưa chốt — 7 user cũ đều ở trạng
-    // thái này nên không cần migration.
+    // CŨ, không còn được ghi và không còn được đọc: trước đây quyền lợi chốt ở lần Reserve
+    // đầu tiên. Giờ quyền lợi tính theo hạng hiện tại tới TOP_DEADLINE, sau đó đọc từ
+    // user.final. Giữ khai báo để Mongoose (strict) không xoá dữ liệu cũ khỏi document.
     lockedRank: { type: Number },
     budget: { type: Number },
     allowedPools: { type: [String], default: undefined },
 
-    // Giá cũng đông cứng cùng quyền lợi: nếu để giá trôi, user sửa lại lựa chọn vài
-    // tuần sau có thể thấy giỏ cũ vượt ngân sách dù không đổi gì.
+    // Giá đông cứng từ lúc chọn mã: nếu để giá trôi, user sửa lại lựa chọn vài tuần sau
+    // có thể thấy giỏ cũ vượt ngân sách dù không đổi gì. Vẫn ghi như cũ.
     lockedPrices: {
       type: [new Schema({ ticker: { type: String, required: true }, price: { type: Number, required: true } }, { _id: false })],
       default: undefined
     },
     totalValue: { type: Number }
+  },
+  { _id: false }
+);
+
+// Kết quả chốt Top 1.000, do `npm run finalize` ghi một lần sau TOP_DEADLINE. Có field này
+// thì quyền lợi đọc từ đây, không tính lại theo hạng nữa — đây cũng là bản ghi để đối soát
+// lúc phát quà thật.
+const finalSchema = new Schema(
+  {
+    early: { type: Boolean },
+    // Hạng Top tại thời điểm chốt (vị trí theo RANK_ORDER trên toàn bộ user).
+    topRank: { type: Number },
+    inTop: { type: Boolean },
+    budget: { type: Number },
+    pools: { type: [String], default: undefined },
+    finalizedAt: { type: Date },
+    // Giỏ đang có không vừa quyền lợi đã chốt -> phải chọn lại trước REPICK_DEADLINE.
+    needsRepick: { type: Boolean },
+    repickedAt: { type: Date },
+    // Quá hạn mà chưa chọn lại thì `npm run close-repick` tự cắt giỏ và ghi mốc này.
+    autoTrimmedAt: { type: Date }
   },
   { _id: false }
 );
@@ -59,6 +80,10 @@ const userSchema = new Schema(
 
     // Lựa chọn cổ phiếu ở màn hình Reserve; chọn lại thì ghi đè
     reservation: { type: reservationSchema, default: undefined },
+
+    // Quyền lợi đã chốt sau TOP_DEADLINE. KHÔNG có default: thiếu field nghĩa là chưa chốt,
+    // và phaseOf() dựa vào đúng điều đó để phân biệt 'frozen' với 'repick'.
+    final: { type: finalSchema },
 
     // Khai báo tay thay vì dùng timestamps:true, để document ghi mới có hình dạng
     // giống hệt các document đã có — không mọc thêm updatedAt ở cấp user.
