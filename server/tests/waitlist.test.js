@@ -352,4 +352,12 @@ describe('join() cấp joinIndex', () => {
     assert.equal(user.joinIndex, 2);
     assert.equal(await User.countDocuments({}), 2);
   });
+
+  it('email đã có nhưng chưa được cấp số thì đợi tới khi có joinIndex', async () => {
+    const doc = await User.create({ email: 'slow@test.local', refCode: 'SLOW01' });
+    setTimeout(() => User.updateOne({ _id: doc._id }, { $set: { joinIndex: 7, score: 7 } }).exec(), 100);
+    const { user, created } = await join('slow@test.local');
+    assert.equal(created, false);
+    assert.equal(user.joinIndex, 7);
+  });
 });

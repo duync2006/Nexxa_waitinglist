@@ -139,11 +139,29 @@ async function uniqueRefCode() {
   }
 }
 
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+// User đã tồn tại nhưng request đang cấp số cho nó có thể chưa xong. Đợi (tối đa ~500ms)
+// tới khi có joinIndex; nếu người tạo thất bại và đã xoá user thì tra lại theo email.
+// Hết cách thì ném lỗi, không trả user chưa có số.
+async function waitForNumber(user, email) {
+  if (user.joinIndex !== undefined && user.joinIndex !== null) return user;
+  for (let i = 0; i < 10; i++) {
+    await sleep(50);
+    const fresh = await User.findById(user._id);
+    if (!fresh) break;
+    if (fresh.joinIndex !== undefined && fresh.joinIndex !== null) return fresh;
+  }
+  const byEmail = await findByEmail(email);
+  if (byEmail && byEmail.joinIndex !== undefined && byEmail.joinIndex !== null) return byEmail;
+  throw new Error('Không lấy được số thứ tự đăng ký cho email này');
+}
+
 // Trả về { user, created }. created=false nghĩa là email đã đăng ký từ trước — caller
 // quyết định trả 409 hay không, service không biết gì về HTTP.
 export async function join(email, referredByCode) {
   const existing = await findByEmail(email);
-  if (existing) return { user: existing, created: false };
+  if (existing) return { user: await waitForNumber(existing, email), created: false };
 
   const inviter = referredByCode ? await findByRefCode(referredByCode) : null;
   // Tự mời chính mình thì không tính
@@ -165,7 +183,7 @@ export async function join(email, referredByCode) {
   } catch (err) {
     if (err.code === 11000) {
       const dup = await findByEmail(email);
-      if (dup) return { user: dup, created: false };
+      if (dup) return { user: await waitForNumber(dup, email), created: false };
     }
     throw err;
   }
