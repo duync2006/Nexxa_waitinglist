@@ -445,6 +445,8 @@ button:disabled { opacity: 0.6; cursor: not-allowed; }
 .ring-value { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; font-variant-numeric: tabular-nums; line-height: 1; }
 .ring-value b { font-size: clamp(16px, 4.6vw, 19px); font-weight: 800; letter-spacing: -0.02em; color: var(--ink); }
 .ring-value span { font-size: 10px; font-weight: 500; color: var(--muted); }
+/* Số suất còn lại cùng cỡ với nhãn bên ngoài vòng (.ring-label), không to như trước */
+.ring-value .ring-remain { font-size: 13px; font-weight: 700; letter-spacing: 0; }
 .ring figcaption { display: flex; flex-direction: column; align-items: center; gap: 1px; text-align: center; }
 .ring-label { display: flex; align-items: center; gap: 5px; font-size: 13px; font-weight: 700; color: var(--ink); }
 /* Chấm màu trước nhãn để nhãn khớp với màu cung phía trên */

@@ -59,8 +59,8 @@ function Ring({ label, hint, slots, left, tone, center, fraction }) {
             </>
           ) : (
             <>
-              <b>{fmt(remain)}</b>
-              <span>/ {fmt(slots)}</span>
+              <b className="ring-remain">{fmt(remain)}</b>
+              <span>Remaining</span>
             </>
           )}
         </div>
@@ -102,14 +102,14 @@ export default function Scarcity({ slots }) {
       <div className="scarcity-rings">
         <Ring
           label={`First ${fmt(slots.firstSlots)}`}
-          hint="Đăng ký sớm"
+          // hint="Đăng ký sớm"
           slots={slots.firstSlots}
           left={slots.firstRemaining}
           tone="first"
         />
         <Ring
           label={`Top ${fmt(slots.topSlots)}`}
-          hint="Theo điểm mời"
+          // hint="Theo điểm mời"
           slots={slots.topSlots}
           left={slots.topRemaining}
           tone="top"
