@@ -119,6 +119,15 @@ lúc khởi động. Mỗi lần gọi `getCampaign()` đọc lại `process.env
 | `repick` | Đã `finalize` (có `user.final`), hoặc là người đăng ký muộn, và chưa tới `REPICK_DEADLINE` (hoặc chưa đặt hạn này) | `user.final` (đã chốt) | Sửa được trong quyền lợi đã chốt. Người `needsRepick` chọn xong thì ghi `repickedAt` |
 | `closed` | Như `repick` nhưng đã qua `REPICK_DEADLINE` | `user.final` | Khoá hẳn, **423** |
 
+Profile (`/waitlist/me`, `/waitlist/verify`) và `/reserve/options` cùng trả ba field về giai đoạn (`phaseInfo`
+trong `campaign.js`), để FE hiện đúng thông báo mà không tự suy luật từ đồng hồ máy:
+
+| Field | Ý nghĩa |
+|---|---|
+| `phase` | `phaseOf(user)` như bảng trên. Bản xem thử: giai đoạn của người đăng ký ngay bây giờ |
+| `needsRepick` | `final.needsRepick && !final.repickedAt && !final.autoTrimmedAt`: phải chọn lại mà chưa làm. Bản xem thử luôn `false` |
+| `repickDeadline` | `REPICK_DEADLINE` dạng ISO, hoặc `null` khi chưa đặt |
+
 **Người đăng ký muộn** (`createdAt >= TOP_DEADLINE`, `isLateRegistrant`) đứng ngoài cuộc đua Top:
 - `inTop` luôn `false`, không bao giờ `frozen`, `finalize` không chốt gì cho họ (không có `user.final`).
 - Trước `REPICK_DEADLINE` họ chọn được (`repick`), sau đó `closed`.
@@ -139,10 +148,16 @@ Thứ tự vận hành xem [README, mục "Chốt Top 1.000"](../README.md).
 4. Giỏ **không hợp lệ** (có mã ngoài `pools`, mã thiếu giá, hoặc tổng theo `lockedPrices` > `budget`) thì
    `needsRepick = true` và gọi `sendRepickEmail`. Hàm này hiện **chỉ in ra console** (mailer chưa gắn nhà cung cấp).
 5. Idempotent: user đã có `final` bị bỏ qua nhưng vẫn chiếm một vị trí trong bảng hạng nên hạng của người khác
-   không đổi giữa các lần chạy. Ghi theo điều kiện `final: { $exists: false }` nên hai lần chạy song song không ghi đè nhau.
-6. Gửi mail **sau** khi đã ghi. Mail lỗi không làm dừng run mà được gom vào `mailFailed`; script in danh sách,
-   **exit 1**, và operator phải gửi tay (chạy lại sẽ không gửi lại vì user đã có `final`).
-7. In bảng tổng kết: người xét, First, Top, cộng dồn, giỏ phải chọn lại, đã chốt từ trước.
+   không đổi giữa các lần chạy. Mỗi user được ghi bằng **một lệnh `updateOne` riêng** có điều kiện
+   `final: { $exists: false }` (các lệnh trong một lô 500 người chạy song song). Lần chạy nào ghi trúng
+   (`matchedCount = 1`) thì mới đếm người đó vào First/Top/cộng dồn/chọn lại và mới gửi mail cho họ; người bị lần
+   chạy khác chốt trước thì tính vào `skipped`. Vì vậy chạy song song không ghi đè, không đếm trùng, không gửi mail trùng.
+6. Gửi mail **sau** khi đã ghi, chỉ cho người mà chính lần chạy đó ghi được. Mail lỗi không làm dừng run mà được
+   gom vào `mailFailed`; script in danh sách, **exit 1**, và operator phải gửi tay (chạy lại sẽ không gửi lại vì
+   user đã có `final`).
+7. In bảng tổng kết của **lần chạy này**: người xét, First, Top, cộng dồn, giỏ phải chọn lại, đã chốt từ trước.
+   Sau đó in `inTopTotal` = `countDocuments({ 'final.inTop': true })` đếm lại từ DB. Đây là **con số chuẩn** để đối
+   soát; các con số kia chỉ là phần lần chạy đó ghi được.
 
 **`npm run close-repick`** (`close-repick.js`):
 1. Từ chối chạy nếu `now < REPICK_DEADLINE`.
@@ -160,6 +175,7 @@ Thứ tự vận hành xem [README, mục "Chốt Top 1.000"](../README.md).
 | Không thuộc nhóm nào | 50.000đ | Chỉ Standard |
 
 Profile và `/reserve/options` trả `early`, `rank`, `inTop`, `budget`, `vip` (= `early || inTop`); FE không tự cộng ngân sách.
+Cả hai cũng trả `phase`, `needsRepick`, `repickDeadline` (xem 4.5).
 
 ### Nguồn quyền lợi
 - Có `user.final`: trả đúng bản đã chốt (`final.budget`, `final.pools`, `final.inTop`, `final.topRank`).
@@ -206,16 +222,26 @@ thành `groupType: 'VIP' | 'STANDARD'` trong collection `prices`.
 ### Phía FE (ReserveModal, App)
 - Chỉ hiển thị những nhóm có trong `opts.pools`. Người bậc Tiêu chuẩn **không thấy** nhóm VIP.
 - Mã chưa chọn bị làm mờ nếu chưa có giá hoặc giá lớn hơn phần ngân sách còn lại. Mã đã chọn thì luôn bấm được để bỏ ra.
-- Nút "Nhận" chỉ bật khi người dùng đã đăng nhập, giỏ có ít nhất 1 mã, quyền chọn đã tải xong và không có request nào đang chạy.
+- Nút "Nhận" chỉ bật khi người dùng đã đăng nhập, giỏ có ít nhất 1 mã, quyền chọn đã tải xong, không có request nào đang chạy
+  và giỏ **không bị khoá** (`phase` không phải `frozen`/`closed`). Giỏ khoá thì nút "Giữ N mã này" của người chưa đăng nhập cũng tắt.
+- Banner theo `opts.phase` (màu hổ phách, trên thanh ngân sách):
+  - `frozen`: "Đang chốt kết quả Top 1.000. Vui lòng quay lại sau."
+  - `closed`: "Đã hết hạn chọn cổ phiếu."
+  - `repick` và `needsRepick`: "Kết quả Top đã chốt. Vui lòng chọn lại cổ phiếu trước {ngày giờ `repickDeadline`, giờ Việt Nam}."
+    (chưa đặt `REPICK_DEADLINE` thì bỏ phần "trước …"). Nhận thành công thì banner tắt ngay.
 - Người chưa đăng nhập vẫn chọn được giỏ. Giỏ được giữ ở `App` (`pendingBasket`) và tự gửi đi sau khi đăng nhập xong.
 - **Người dùng cũ đăng nhập bằng OTP cũng được áp giỏ đã chọn lúc chưa đăng nhập**: giỏ đó **ghi đè** giỏ đã lưu trước đó
   (`handleJoined` chạy cho cả đăng ký mới lẫn `alreadyRegistered`).
-- **Không mất giỏ âm thầm.** `pendingBasket` chỉ được xoá khi `api.reserve` thành công. Lỗi thì giữ giỏ, mở lại
+- **Không mất giỏ âm thầm.** `pendingBasket` chỉ được xoá khi `api.reserve` thành công (ghi tự động sau đăng nhập,
+  hoặc bấm "Nhận" trong modal: modal gọi `onSaved` để App xoá giỏ tạm).
+- **Giỏ không rò sang người sau.** "Dùng email khác" (`handleReset`) xoá `pendingBasket`, `reserveError` và thông báo
+  phiên hết hạn, nên người đăng nhập sau trên cùng tab không bị áp giỏ của người trước. Lỗi thì giữ giỏ, mở lại
   `ReserveModal` kèm lỗi của server (`initialError`). Mã server báo `wrongPool` được **giữ nguyên trong giỏ
   ở trạng thái lỗi** để người dùng bỏ ra, không bị lọc đi.
 - Nhãn ngân sách:
   - Bản xem thử: "Ngân sách dự kiến".
-  - Người thuộc First (kể cả First + Top): "Ngân sách First 1.000". Con số bên cạnh vẫn là `budget` server trả, đã cộng dồn nên là 200.000đ nếu có cả Top.
+  - Người thuộc cả First và Top: "Ngân sách First + Top" (con số bên cạnh là `budget` đã cộng dồn, 200.000đ).
+  - Người chỉ thuộc First: "Ngân sách First 1.000".
   - Người còn lại: "Ngân sách hạng #N" (N là hạng Top hiện tại).
 
 ## 7. OTP
@@ -241,9 +267,9 @@ Mọi API đều dùng **POST**. Ngoại lệ duy nhất là `GET /r/:code`, vì
 | `/api/waitlist/check` | không | `{ exists }` |
 | `/api/waitlist/request-otp` | không | gửi OTP |
 | `/api/waitlist/verify` | không | `{ profile, token }`, thêm `alreadyRegistered: true` nếu email đã đăng ký (200, không còn 409) |
-| `/api/waitlist/me` | bắt buộc | `profile` |
+| `/api/waitlist/me` | bắt buộc | `profile` (gồm cả `phase`, `needsRepick`, `repickDeadline`) |
 | `/api/waitlist/logout` | bắt buộc | `{ ok: true }`, xoá phiên |
-| `/api/reserve/options` | tuỳ chọn | `{ rank, early, inTop, budget, pools, phase, preview, selected, prices }` |
+| `/api/reserve/options` | tuỳ chọn | `{ rank, early, inTop, budget, pools, phase, needsRepick, repickDeadline, preview, selected, prices }` |
 | `/api/reserve` | bắt buộc | `{ ok, tickers, totalValue, budget }` |
 | `/api/catalog` | không | `{ totalSlots, entitlements, pools, stocks }` |
 
@@ -271,7 +297,7 @@ Mã lỗi riêng của đợt này: **401** thiếu hoặc sai token, **423** gi
 
 ### Profile
 ```js
-{ email, early, joinIndex, rank, inTop, budget, vip, registered, refCode, invites }
+{ email, early, joinIndex, rank, inTop, budget, vip, registered, refCode, invites, phase, needsRepick, repickDeadline }
 ```
 
 | Trường | Ý nghĩa |
@@ -282,6 +308,7 @@ Mã lỗi riêng của đợt này: **401** thiếu hoặc sai token, **423** gi
 | `inTop` | Đang trong Top 1.000. Có `user.final` thì lấy theo bản chốt. Người đăng ký muộn luôn `false` |
 | `budget` | First + Top cộng dồn |
 | `vip` | `early \|\| inTop`. Server tự quyết định, FE chỉ đọc cờ này |
+| `phase`, `needsRepick`, `repickDeadline` | Giai đoạn campaign của người này, xem 4.5 |
 
 ### Che email
 Email được che **ở server** trước khi trả ra API công khai, theo dạng
@@ -295,9 +322,12 @@ email. Phần domain được giữ nguyên.
 - Vòng First, và vòng Top khi `topRemaining > 0`: giữa vòng hiển thị số suất **còn lại** dạng `X / 1.000`. Độ dài cung
   ngoài bằng % suất còn lại, bắt đầu ở 12 giờ và chạy theo chiều kim đồng hồ. Khi còn suất, cung luôn giữ tối thiểu 1,5% để không trông như đã hết.
 - **Vòng Top khi `topRemaining === 0`** chuyển sang dạng kết hợp:
-  - Giữa vòng hiện ngưỡng "≥ `topCutoff` đ", kèm dòng đếm ngược tới `topDeadline` (hook `useCountdown`).
+  - Giữa vòng hiện ngưỡng "≥ `topCutoff` điểm" (ghi rõ "điểm", không viết "đ" để khỏi đọc thành đồng), kèm dòng
+    đếm ngược tới `topDeadline` (hook `useCountdown`).
   - Cung thể hiện thời gian còn lại, tính từ `topStart` tới `topDeadline`. Thiếu `topStart` thì vẽ đầy cung. Sau deadline cung về rỗng.
-  - `topCutoff = 0` thì thay dòng ngưỡng bằng "Mời 1 bạn để vào Top". Không có deadline thì chỉ hiện ngưỡng.
+  - `topCutoff = 0` (trước deadline) thì thay dòng ngưỡng bằng "Mời 1 bạn" và dòng ghi chú "để vào Top", cỡ chữ
+    10–12px, tối đa 78% bề rộng vòng để nằm gọn trong vòng. Không có deadline thì chỉ hiện ngưỡng.
+  - **Sau deadline** chỉ hiện ngưỡng đã chốt "≥ X điểm" và "Đã chốt", **không** còn lời mời "Mời 1 bạn".
 - Số liệu lấy từ `/api/stats`, App gọi lại mỗi 30 giây và tạm ngừng khi tab bị ẩn. Ở khung hình
   đầu tiên, trước khi có stats, cả hai vòng được coi là còn nguyên suất.
 
@@ -309,7 +339,10 @@ email. Phần domain được giữ nguyên.
 | First + Top | như dòng First | `First + Top · VIP` |
 | Tiêu chuẩn | như dòng Top | `Tiêu chuẩn` |
 
-- Phần mời bạn hiện cho **mọi người**: "Mời bạn bè, leo hạng nhanh hơn" kèm "+10 điểm".
+- Phần mời bạn hiện cho **mọi người**. Trước deadline (`me.phase === 'open'`): "Mời bạn bè, leo hạng nhanh hơn" kèm
+  "+10 điểm". Sau deadline (`phase` khác `open`): chỉ còn "Mời bạn bè cùng nhận cổ phiếu" và link mời, bỏ "+10 điểm".
+- `me.phase === 'repick'` và `me.needsRepick`: hiện banner "Kết quả Top đã chốt. Vui lòng chọn lại cổ phiếu trước
+  {ngày giờ `repickDeadline`}." ngay trên phần mời bạn. Ghi giỏ thành công thì App gọi lại `/waitlist/me` để banner tắt.
 - Ô quà hiển thị "Cổ phiếu trị giá" theo `me.budget`.
 - Email đã đăng ký thì đi thẳng sang bước OTP, kèm câu "Email này đã đăng ký — nhập mã để xem kết quả".
 - Khi mở trang, nếu `sessionStorage` có token thì gọi `/waitlist/me` để khôi phục kết quả (tải lại trong cùng tab).
@@ -325,7 +358,16 @@ Bậc quà (màu sắc) lấy từ `tierOf(me)` trong [`src/lib/catalog.jsx`](..
   - Chỉ First: "Bạn đã chắc suất VIP".
   - Chỉ Top: "Bạn đang trong Top 1.000".
   - Tiêu chuẩn: "Bạn đang ở hạng Tiêu chuẩn".
-- Thanh điểm so với `cutoff` hiện cho **mọi** người đã đăng nhập (ai cũng có hạng), khi `cutoff` không phải `null`.
+- "Cuộc đua đã khép" = `me.phase` khác `open`, hoặc đồng hồ tới `topDeadline` đã chạm 0. Khi đó các câu "mời bạn
+  bè để vào/giữ Top" đổi thành "Mời bạn bè cùng nhận cổ phiếu", mục "+10 điểm" trong "Cách nhận thêm" bị ẩn,
+  người chưa đăng nhập chỉ được hứa tới 100.000đ (First) hoặc 50.000đ khi đã hết First, và dòng ngưỡng đổi
+  thành "Ngưỡng Top 1.000 lúc chốt".
+- Thanh điểm so với `cutoff` (khi `cutoff` không phải `null`) dựa trên **`me.inTop`**, không so `points` với `cutoff`
+  (bằng điểm người hạng 1.000 mà đăng ký sau thì vẫn ở ngoài; ngưỡng 0 thì ai cũng "đạt" về con số):
+  - `inTop`: thanh đầy, "Hơn ngưỡng X điểm" (hoặc "Đang ở đúng ngưỡng" khi bằng điểm).
+  - Ngoài Top, cuộc đua còn mở: mốc là `cutoff + 10`, thanh không đầy, "Thiếu X điểm để vào Top"; ngưỡng 0 hoặc
+    chỉ thiếu đúng một lượt mời thì "Mời 1 bạn để vào Top".
+  - Ngoài Top, cuộc đua đã khép: không hiện thanh.
 - Thẻ VIP hiển thị số suất còn lại của **cả hai** đường vào và dòng "Có cả First và Top: cộng dồn 200.000đ".
 - Có hai tab:
   - **"Top 1.000 · Bảng xếp hạng"** (mặc định): gắn huy hiệu "First" cho người thuộc First, có nút "Xem hạng của tôi" và

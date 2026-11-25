@@ -38,7 +38,7 @@ mà điều hướng trình duyệt luôn gửi GET, nên route này bắt buộ
 | POST | `/api/waitlist/verify` | body `{ email, otp }` → `{ profile, token }` (tối đa 5 lần sai). Email đã đăng ký → **200** kèm `alreadyRegistered: true` (đây là bước đăng nhập, không còn 409) |
 | POST | `/api/waitlist/me` | **cần token** → `profile` |
 | POST | `/api/waitlist/logout` | **cần token** → `{ ok: true }`, xoá phiên |
-| POST | `/api/reserve/options` | token tuỳ chọn → `{ rank, early, inTop, budget, pools, phase, preview, selected, prices }`. Không token → bản xem thử (`preview: true`) |
+| POST | `/api/reserve/options` | token tuỳ chọn → `{ rank, early, inTop, budget, pools, phase, needsRepick, repickDeadline, preview, selected, prices }`. Không token → bản xem thử (`preview: true`) |
 | POST | `/api/reserve` | **cần token**, body `{ tickers }` → `{ ok, tickers, totalValue, budget }`, ghi đè lựa chọn cũ. Danh tính lấy từ token, không đọc email trong body |
 | GET | `/r/:code` | Link mời ngắn, chuyển hướng về `/?ref=CODE`. **Giữ GET** — xem đoạn trên |
 
@@ -47,7 +47,7 @@ FE lưu ở `sessionStorage` (đóng tab là phải OTP lại). Thiếu hoặc s
 
 Có sẵn Postman collection: `docs/nexxa-waitlist.postman_collection.json`. Request `Xác thực OTP` tự lưu token vào biến `token`.
 
-`profile` = `{ email, early, joinIndex, rank, inTop, budget, vip, registered, refCode, invites }`.
+`profile` = `{ email, early, joinIndex, rank, inTop, budget, vip, registered, refCode, invites, phase, needsRepick, repickDeadline }`.
 `rank` là hạng Top trên toàn bộ người đăng ký, **ai cũng có** (kể cả First 1.000).
 
 **Hai campaign chạy song song, có thể chồng nhau:**
@@ -122,8 +122,10 @@ Hai script chạy tay bởi người vận hành, **đúng thứ tự** dưới 
   ```js
   db.users.find({ 'final.needsRepick': true, 'final.repickedAt': { $exists: false } })
   ```
-- `finalize` **idempotent**: chạy lại sẽ bỏ qua người đã có `final` và hạng của mọi người giữ nguyên. Hai lần chạy
-  song song cũng được bảo vệ (mỗi lần ghi có điều kiện `final` chưa tồn tại).
+- `finalize` **idempotent**: chạy lại sẽ bỏ qua người đã có `final` và hạng của mọi người giữ nguyên. Chạy song song
+  cũng an toàn: mỗi user được ghi bằng một lệnh riêng có điều kiện `final` chưa tồn tại, chỉ lần chạy ghi trúng mới
+  đếm và gửi mail cho người đó, nên không ghi đè, không gửi mail trùng. Bảng tổng kết của mỗi lần chạy chỉ là phần
+  lần đó ghi được; con số chuẩn để đối soát là dòng **"Tổng số người inTop trong DB"** in ngay sau bảng.
 - Nếu chưa đặt `REPICK_DEADLINE` thì `close-repick` không chạy được và giỏ sau finalize mở mãi mãi.
 
 ### Cắm nguồn giá cổ phiếu
