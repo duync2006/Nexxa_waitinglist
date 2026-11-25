@@ -51,6 +51,8 @@ export default function App() {
   const [pendingBasket, setPendingBasket] = useState([]);
   // Lỗi khi ghi nhận giỏ ngay sau đăng ký: modal mở lại và hiện lỗi này, giỏ vẫn còn nguyên.
   const [reserveError, setReserveError] = useState(null);
+  // Thông báo hiện ở form email khi phiên hết hạn giữa lúc đang chọn cổ phiếu.
+  const [signupNotice, setSignupNotice] = useState('');
 
   // Gọi lại mỗi 30 giây: con số nhúc nhích ngay trước mắt người đang đọc trang có sức ép
   // khác hẳn một con số tĩnh nạp một lần lúc mở. Tab bị ẩn thì ngừng gọi — không ai nhìn.
@@ -106,6 +108,7 @@ export default function App() {
 
   const handleJoined = async (profile) => {
     setMe(profile);
+    setSignupNotice('');
 
     // Đã chọn cổ phiếu trước khi đăng ký thì ghi nhận luôn, không bắt mở lại modal chọn lần
     // hai. Thất bại (vd. mã VIP mà người này không đủ quyền) thì giữ giỏ, mở lại modal kèm lỗi
@@ -165,6 +168,13 @@ export default function App() {
         onClose={() => { setReserveOpen(false); setReserveError(null); }}
         me={me}
         initialError={reserveError}
+        onSessionExpired={(basket, message) => {
+          setPendingBasket(basket);
+          setSignupNotice(message);
+          setReserveOpen(false);
+          setReserveError(null);
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        }}
         initialBasket={pendingBasket}
         onGoSignup={(basket) => {
           setPendingBasket(basket);
@@ -201,6 +211,7 @@ export default function App() {
             onReset={handleReset}
             onOpenReserve={() => setReserveOpen(true)}
             pendingBasket={pendingBasket}
+            notice={signupNotice}
           />
         {/* <Scarcity slots={slots} /> */}
         </section>

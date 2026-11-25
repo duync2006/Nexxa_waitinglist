@@ -9,7 +9,7 @@ function readRef() {
   try { return new URLSearchParams(window.location.search).get('ref') || null; } catch { return null; }
 }
 
-export default function SignupCard({ me, onJoined, onReset, onOpenReserve, pendingBasket = [] }) {
+export default function SignupCard({ me, onJoined, onReset, onOpenReserve, pendingBasket = [], notice = '' }) {
   const [ref] = useState(readRef);
   // Vào bằng link mời thì luôn mở form đăng ký, kể cả khi trình duyệt còn profile cũ —
   // link mời là để người mới đăng ký, không phải để xem lại kết quả của người đang ngồi máy.
@@ -25,13 +25,17 @@ export default function SignupCard({ me, onJoined, onReset, onOpenReserve, pendi
   // Mất me (bấm "Dùng email khác") thì quay lại form nhập email. Thiếu nhánh này sẽ kẹt ở
   // step 'result' và render ra card rỗng. Chiều ngược lại do submitEmail/submitOtp tự gọi.
   useEffect(() => {
-    if (me) return;
+    // me về muộn (khôi phục phiên sau khi tải lại trang) thì chuyển sang màn kết quả.
+    if (me) {
+      if (!ref) setStep('result');
+      return;
+    }
     setStep('email');
     setEmail('');
     setOtp('');
     setError('');
     setReturning(false);
-  }, [me]);
+  }, [me, ref]);
 
   useEffect(() => {
     if (cooldown <= 0) return undefined;
@@ -125,7 +129,7 @@ export default function SignupCard({ me, onJoined, onReset, onOpenReserve, pendi
             </button>
           </div>
           <button type="button" className="btn btn-outline" onClick={onOpenReserve}>Xem cổ phiếu được tặng</button>
-          {error && <p role="alert" className="error">{error}</p>}
+          {(error || notice) && <p role="alert" className="error">{error || notice}</p>}
           <p className="muted-sm">
             Chúng tôi sẽ gửi mã xác thực 6 số tới email này.
             {ref && <> Bạn được mời bởi mã <strong>{ref.toUpperCase()}</strong>.</>}

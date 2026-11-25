@@ -73,7 +73,7 @@ function ScrollBox({ label, children }) {
   );
 }
 
-export default function ReserveModal({ open, onClose, me, onGoSignup, initialBasket = [], initialError = null }) {
+export default function ReserveModal({ open, onClose, me, onGoSignup, initialBasket = [], initialError = null, onSessionExpired }) {
   // Danh mục từ /api/catalog; quyền chọn và giá đã chốt vẫn từ /api/reserve/options vì
   // chúng phụ thuộc từng người — catalog không biết ai đang mở màn hình này.
   const { pools: allPools, poolStocks, poolOfTicker } = useCatalog();
@@ -114,7 +114,10 @@ export default function ReserveModal({ open, onClose, me, onGoSignup, initialBas
       })
       .catch((err) => { if (alive) setError(err.message); });
     return () => { alive = false; };
-  }, [open, me?.email]);
+    // Chỉ chạy lại khi mở/đóng: me đổi lúc modal đang mở (vd. phiên hết hạn) không được
+    // xoá giỏ đang chọn.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
 
   if (!open) return null;
 
@@ -157,6 +160,11 @@ export default function ReserveModal({ open, onClose, me, onGoSignup, initialBas
       await api.reserve(basket);
       setDone(true);
     } catch (err) {
+      // 401: phiên hết hạn. Đưa giỏ về App để giữ lại, rồi về form email.
+      if (err.status === 401 && onSessionExpired) {
+        onSessionExpired(basket, err.message);
+        return;
+      }
       setError(err.message);
       setBadTickers(err.data?.wrongPool ?? []);
     } finally {
