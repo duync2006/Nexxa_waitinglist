@@ -17,3 +17,6 @@ export const PRICE_MAX_AGE_MS = 48 * 60 * 60 * 1000;
 
 // Số dòng mỗi trang của bảng xếp hạng công khai.
 export const LEADERBOARD_PAGE_SIZE = 7;
+
+// Token phiên sống 12 giờ kể từ lúc xác thực OTP.
+export const SESSION_TTL_MS = 12 * 60 * 60 * 1000;

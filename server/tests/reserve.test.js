@@ -81,7 +81,7 @@ describe('POST /api/reserve', () => {
   it('ghi reservation không làm mất các field khác của user', async () => {
     // Bẫy strict của Mongoose: field không khai báo trong schema sẽ bị xoá khi ghi.
     const inviter = await joinViaApi(request, app, 'inviter@test.local');
-    await joinViaApi(request, app, 'a@test.local', inviter.body.refCode);
+    await joinViaApi(request, app, 'a@test.local', inviter.body.profile.refCode);
 
     await request(app).post('/api/reserve').send({ email: 'a@test.local', tickers: ['VCB'] });
 
@@ -89,6 +89,6 @@ describe('POST /api/reserve', () => {
     for (const field of ['email', 'refCode', 'joinIndex', 'score', 'invites', 'referrer', 'referredBy', 'referees', 'createdAt', 'reservation']) {
       assert.ok(field in saved, `mất field ${field} sau khi ghi reservation`);
     }
-    assert.equal(saved.referredBy, inviter.body.refCode);
+    assert.equal(saved.referredBy, inviter.body.profile.refCode);
   });
 });

@@ -4,7 +4,7 @@ import request from 'supertest';
 import { createApp } from '../app.js';
 import { BOOST } from '../config/constants.js';
 import { User } from '../models/index.js';
-import { joinViaApi, resetDb, setupDb, startRaceJoins, teardownDb } from './helpers/db.js';
+import { authed, joinViaApi, resetDb, setupDb, startRaceJoins, teardownDb } from './helpers/db.js';
 
 const app = createApp();
 
@@ -16,7 +16,7 @@ describe('Cộng điểm cho người mời', () => {
   it('mời được một người thì invites +1 và score -10', async () => {
     const inviter = await joinViaApi(request, app, 'inviter@test.local');
 
-    await joinViaApi(request, app, 'moi@test.local', inviter.body.refCode);
+    await joinViaApi(request, app, 'moi@test.local', inviter.body.profile.refCode);
 
     const saved = await User.findOne({ email: 'inviter@test.local' });
     assert.equal(saved.invites, 1);
@@ -26,7 +26,7 @@ describe('Cộng điểm cho người mời', () => {
 
   it('ghi quan hệ đủ hai chiều: referrer của người được mời và referees của người mời', async () => {
     const inviter = await joinViaApi(request, app, 'inviter@test.local');
-    await joinViaApi(request, app, 'moi@test.local', inviter.body.refCode);
+    await joinViaApi(request, app, 'moi@test.local', inviter.body.profile.refCode);
 
     const a = await User.findOne({ email: 'inviter@test.local' });
     const b = await User.findOne({ email: 'moi@test.local' });
@@ -41,25 +41,25 @@ describe('Cộng điểm cho người mời', () => {
     await startRaceJoins();
     // u1 đăng ký đầu tiên VÀ mời được 1 người  -> 10 điểm
     const u1 = await joinViaApi(request, app, 'u1@test.local');
-    await joinViaApi(request, app, 'cua-u1@test.local', u1.body.refCode);
+    await joinViaApi(request, app, 'cua-u1@test.local', u1.body.profile.refCode);
     // u2, u3 đăng ký, không mời ai            -> 0 điểm
     for (const n of [2, 3]) await joinViaApi(request, app, `u${n}@test.local`);
 
     const late = await joinViaApi(request, app, 'late@test.local'); // người thứ 5 của nhóm đua, 0 điểm
-    assert.equal(late.body.rank, 5); // sau u1 (10 điểm), rồi cua-u1, u2, u3 (0 điểm, vào trước)
+    assert.equal(late.body.profile.rank, 5); // sau u1 (10 điểm), rồi cua-u1, u2, u3 (0 điểm, vào trước)
 
-    await joinViaApi(request, app, 'moi@test.local', late.body.refCode);
+    await joinViaApi(request, app, 'moi@test.local', late.body.profile.refCode);
 
     // 10 điểm: vượt cua-u1, u2, u3 (0 điểm), nhưng vẫn sau u1 — bằng điểm thì ai
     // đăng ký trước đứng trên.
-    const res = await request(app).post('/api/waitlist/check').send({ email: 'late@test.local' });
-    assert.equal(res.body.profile.rank, 2);
+    const res = await authed(request(app).post('/api/waitlist/me'), late.body.token);
+    assert.equal(res.body.rank, 2);
   });
 
   it('mời nhiều người thì điểm cộng dồn', async () => {
     const inviter = await joinViaApi(request, app, 'inviter@test.local');
 
-    for (const n of [1, 2, 3]) await joinViaApi(request, app, `moi${n}@test.local`, inviter.body.refCode);
+    for (const n of [1, 2, 3]) await joinViaApi(request, app, `moi${n}@test.local`, inviter.body.profile.refCode);
 
     const saved = await User.findOne({ email: 'inviter@test.local' });
     assert.equal(saved.invites, 3);
@@ -71,8 +71,8 @@ describe('Cộng điểm cho người mời', () => {
     const me = await joinViaApi(request, app, 'me@test.local');
     const before = await User.findOne({ email: 'me@test.local' });
 
-    // Đăng ký lại bằng chính refCode của mình — rơi vào nhánh 409
-    await joinViaApi(request, app, 'me@test.local', me.body.refCode);
+    // Đăng ký lại bằng chính refCode của mình — rơi vào nhánh alreadyRegistered
+    await joinViaApi(request, app, 'me@test.local', me.body.profile.refCode);
 
     const after = await User.findOne({ email: 'me@test.local' });
     assert.equal(after.invites, before.invites);
@@ -91,7 +91,7 @@ describe('Cộng điểm cho người mời', () => {
 
   it('người được mời không được cộng điểm, chỉ người mời', async () => {
     const inviter = await joinViaApi(request, app, 'inviter@test.local');
-    await joinViaApi(request, app, 'moi@test.local', inviter.body.refCode);
+    await joinViaApi(request, app, 'moi@test.local', inviter.body.profile.refCode);
 
     const invitee = await User.findOne({ email: 'moi@test.local' });
     assert.equal(invitee.invites, 0);

@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import * as controller from '../controllers/waitlist.controller.js';
 import { getStats, getLeaderboard } from '../controllers/stats.controller.js';
+import { requireSession } from '../middlewares/session.middleware.js';
 import { asyncHandler } from '../middlewares/async-handler.js';
 
 export const waitlistRoutes = Router();
@@ -12,3 +13,5 @@ waitlistRoutes.post('/leaderboard', asyncHandler(getLeaderboard));
 waitlistRoutes.post('/waitlist/check', asyncHandler(controller.check));
 waitlistRoutes.post('/waitlist/request-otp', asyncHandler(controller.requestOtp));
 waitlistRoutes.post('/waitlist/verify', asyncHandler(controller.verify));
+waitlistRoutes.post('/waitlist/me', requireSession, asyncHandler(controller.me));
+waitlistRoutes.post('/waitlist/logout', requireSession, asyncHandler(controller.logout));
