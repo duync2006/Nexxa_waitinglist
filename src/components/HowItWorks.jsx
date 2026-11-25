@@ -1,4 +1,6 @@
 import NexxaBot from './NexxaBot.jsx';
+import { vnd } from '../lib/format.js';
+import { FIRST_BUDGET, TOP_BUDGET, REST_BUDGET } from '../../shared/catalog.js';
 
 // Thẻ giới thiệu Chương trình thưởng trên trang chính. Chi tiết (hạng thưởng, cách nhận
 // thêm, bảng xếp hạng, điều khoản) đã nằm ở trang Phần thưởng (#/rewards), nên ở đây chỉ
@@ -10,10 +12,10 @@ export default function HowItWorks() {
       <a className="promo" href="#/rewards">
         <div className="promo-text">
           <span className="promo-eyebrow">Chương trình thưởng</span>
-          <h2 className="promo-title">Nhận cổ phiếu trị giá đến 100.000đ</h2>
+          <h2 className="promo-title">Nhận cổ phiếu trị giá đến {vnd(FIRST_BUDGET + TOP_BUDGET)}</h2>
           <div className="promo-tiers">
-            <span className="promo-tier promo-tier-vip"><b>VIP</b> 100.000đ</span>
-            <span className="promo-tier promo-tier-std"><b>Tiêu chuẩn</b> 50.000đ</span>
+            <span className="promo-tier promo-tier-vip"><b>VIP</b> {vnd(FIRST_BUDGET)}/suất</span>
+            <span className="promo-tier promo-tier-std"><b>Tiêu chuẩn</b> {vnd(REST_BUDGET)}</span>
           </div>
           <span className="promo-cta">
             Xem chi tiết

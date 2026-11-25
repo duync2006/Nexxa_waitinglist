@@ -3,6 +3,7 @@ import { api } from '../lib/api.js';
 import { fmt, vnd } from '../lib/format.js';
 import { useCountdown, countdownText } from '../lib/useCountdown.js';
 import NexxaBot from './NexxaBot.jsx';
+import { FIRST_BUDGET, TOP_BUDGET, REST_BUDGET } from '../../shared/catalog.js';
 
 // Mỗi lượt mời = 10 điểm. Hạng xếp theo điểm ở server (bằng điểm thì ai vào trước đứng trên).
 const POINTS_PER_INVITE = 10;
@@ -112,7 +113,7 @@ export default function RewardsPage({ me, slots, onBack }) {
               body: `Mời bạn bè để leo lên Top ${fmt(topSlots)} và nhận cổ phiếu VIP.`, cta: 'Mời bạn bè' }
           : firstRemaining > 0
             ? { eyebrow: 'Suất VIP đang mở', title: `Còn ${fmt(firstRemaining)} suất First ${fmt(firstSlots)} — đăng ký để chắc VIP`,
-                body: 'Hoàn tất đăng ký và eKYC để nhận cổ phiếu trị giá đến 200.000đ.', cta: 'Đăng ký ngay' }
+                body: `Hoàn tất đăng ký và eKYC để nhận cổ phiếu trị giá đến ${vnd(FIRST_BUDGET + TOP_BUDGET)}.`, cta: 'Đăng ký ngay' }
             : { eyebrow: 'Suất VIP đang mở', title: `Đã hết suất First ${fmt(firstSlots)} — vào Top ${fmt(topSlots)} để nhận VIP`,
                 body: 'Đăng ký rồi mời bạn bè để tích điểm, 1.000 người điểm cao nhất nhận cổ phiếu VIP.', cta: 'Đăng ký ngay' };
 
@@ -173,7 +174,7 @@ export default function RewardsPage({ me, slots, onBack }) {
             {/* Một bậc VIP, hai đường vào — mỗi đường một dòng số suất riêng. */}
             <div className={`rw-tier${isVip ? ' is-me-vip' : ''}`}>
               <span className="rw-badge rw-badge-vip">VIP</span>
-              <span className="rw-tier-amt">100.000đ</span>
+              <span className="rw-tier-amt">{vnd(FIRST_BUDGET)}</span>
               <div className="rw-tier-route">
                 <span className="rw-tier-note">First {fmt(firstSlots)} · đăng ký sớm</span>
                 <span className="rw-tier-left">Còn {fmt(firstRemaining)} / {fmt(firstSlots)}</span>
@@ -182,10 +183,11 @@ export default function RewardsPage({ me, slots, onBack }) {
                 <span className="rw-tier-note">Top {fmt(topSlots)} · theo điểm mời</span>
                 <span className="rw-tier-left">Còn {fmt(topRemaining)} / {fmt(topSlots)}</span>
               </div>
+              <span className="rw-tier-note">Có cả First và Top: cộng dồn {vnd(FIRST_BUDGET + TOP_BUDGET)}</span>
             </div>
             <div className={`rw-tier${isStd ? ' is-me-std' : ''}`}>
               <span className="rw-badge rw-badge-std">TIÊU CHUẨN</span>
-              <span className="rw-tier-amt">50.000đ</span>
+              <span className="rw-tier-amt">{vnd(REST_BUDGET)}</span>
               <span className="rw-tier-note">Ngoài First {fmt(firstSlots)} và Top {fmt(topSlots)} · cổ phiếu tiêu chuẩn</span>
             </div>
           </div>

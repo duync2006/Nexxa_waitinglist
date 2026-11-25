@@ -3,7 +3,7 @@ import { useCountdown, countdownText } from '../lib/useCountdown.js';
 
 // Khối khan hiếm ở hero: hai vòng cho hai đường vào VIP.
 //   First 1.000 — 1.000 người đăng ký đầu tiên, chắc chắn VIP.
-//   Top 1.000   — 1.000 người điểm cao nhất trong số đăng ký từ #1.001 trở đi.
+//   Top 1.000   — 1.000 người điểm cao nhất xếp trên toàn bộ người đăng ký.
 // Số suất còn lại do /api/stats tính sẵn (firstRemaining, topRemaining), component không
 // tự suy luật. Suất Top về 0 khi nhóm đua đủ 1.000 người — thứ hạng bên trong vẫn đổi theo điểm.
 //
