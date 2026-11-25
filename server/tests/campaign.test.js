@@ -2,7 +2,8 @@ import { after, afterEach, before, beforeEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import request from 'supertest';
 import { createApp } from '../app.js';
-import { User } from '../models/index.js';
+import { Counter, User } from '../models/index.js';
+import { FIRST_SLOTS } from '../../shared/catalog.js';
 import { getCampaign, invitesOpen, phaseOf } from '../config/campaign.js';
 import { authed, joinViaApi, resetDb, seedPrices, setupDb, teardownDb } from './helpers/db.js';
 
@@ -169,6 +170,8 @@ describe('Sau TOP_DEADLINE', () => {
   it('reserve khi frozen thì 423', async () => {
     unset();
     const { token } = (await joinViaApi(request, app, 'a@test.local')).body;
+    // Đăng ký TRƯỚC deadline (nếu không sẽ là người đăng ký muộn, không bị frozen).
+    await User.updateOne({ email: 'a@test.local' }, { $set: { createdAt: new Date(Date.now() - 2 * HOUR) } });
     process.env.TOP_DEADLINE = iso(-HOUR);
 
     const res = await authed(request(app).post('/api/reserve'), token).send({ tickers: ['VCB'] });
@@ -234,6 +237,77 @@ describe('Sau TOP_DEADLINE', () => {
     assert.equal(res.status, 200, res.body.error);
     const saved = await User.findOne({ email: 'a@test.local' }).lean();
     assert.equal(saved.final.repickedAt, undefined);
+  });
+
+  it('người đăng ký sau deadline (chưa finalize) không bị frozen, được 50.000đ standard và chọn được', async () => {
+    unset();
+    process.env.TOP_DEADLINE = iso(-HOUR);
+    process.env.REPICK_DEADLINE = iso(HOUR);
+    // Hết suất First: người này là #1.001. Dù đang đứng hạng 1 (DB chỉ có mình họ) vẫn
+    // không được tính vào Top vì đăng ký sau khi cuộc đua đã khép.
+    await Counter.updateOne({ _id: 'users' }, { $set: { seq: FIRST_SLOTS } }, { upsert: true });
+
+    const joined = await joinViaApi(request, app, 'muon@test.local');
+    const { profile, token } = joined.body;
+
+    assert.equal(profile.early, false);
+    assert.equal(profile.rank, 1);
+    assert.equal(profile.inTop, false);
+    assert.equal(profile.vip, false);
+    assert.equal(profile.budget, 50000);
+
+    const opts = await authed(request(app).post('/api/reserve/options'), token);
+    assert.equal(opts.body.phase, 'repick');
+    assert.equal(opts.body.inTop, false);
+    assert.equal(opts.body.budget, 50000);
+    assert.deepEqual(opts.body.pools, ['standard']);
+
+    const vip = await authed(request(app).post('/api/reserve'), token).send({ tickers: ['VCB'] });
+    assert.equal(vip.status, 400);
+
+    const ok = await authed(request(app).post('/api/reserve'), token).send({ tickers: ['PNJ'] });
+    assert.equal(ok.status, 200, ok.body.error);
+    const saved = await User.findOne({ email: 'muon@test.local' }).lean();
+    assert.deepEqual(saved.reservation.tickers, ['PNJ']);
+    assert.equal(saved.final, undefined, 'không được tự sinh final cho người đăng ký muộn');
+  });
+
+  it('người đăng ký sau deadline vẫn còn suất First thì được 100.000đ', async () => {
+    unset();
+    process.env.TOP_DEADLINE = iso(-HOUR);
+
+    const { profile, token } = (await joinViaApi(request, app, 'muon@test.local')).body;
+
+    assert.equal(profile.early, true);
+    assert.equal(profile.inTop, false);
+    assert.equal(profile.budget, 100000, 'chỉ suất First, không cộng Top');
+
+    const res = await authed(request(app).post('/api/reserve'), token).send({ tickers: ['VCB', 'FPT'] });
+    assert.equal(res.status, 200, res.body.error);
+    assert.equal(res.body.budget, 100000);
+  });
+
+  it('sau REPICK_DEADLINE người đăng ký muộn cũng closed', async () => {
+    unset();
+    process.env.TOP_DEADLINE = iso(-2 * HOUR);
+    process.env.REPICK_DEADLINE = iso(-HOUR);
+
+    const { token } = (await joinViaApi(request, app, 'muon@test.local')).body;
+    const user = await User.findOne({ email: 'muon@test.local' });
+
+    assert.equal(phaseOf(user), 'closed');
+    const res = await authed(request(app).post('/api/reserve'), token).send({ tickers: ['PNJ'] });
+    assert.equal(res.status, 423);
+    assert.equal(res.body.error, 'Đã hết hạn chọn cổ phiếu.');
+  });
+
+  it('người đăng ký trước deadline mà chưa finalize vẫn frozen', () => {
+    unset();
+    const topDeadline = new Date(Date.now() - HOUR);
+    process.env.TOP_DEADLINE = topDeadline.toISOString();
+
+    assert.equal(phaseOf({ createdAt: new Date(topDeadline.getTime() - 1) }), 'frozen');
+    assert.equal(phaseOf({ createdAt: topDeadline }), 'repick');
   });
 
   it('options trả phase và quyền lợi đã chốt', async () => {

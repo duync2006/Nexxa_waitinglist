@@ -42,17 +42,26 @@ export function invitesOpen(now = new Date()) {
   return !topDeadline || now < topDeadline;
 }
 
+// Người đăng ký muộn: tạo tài khoản từ TOP_DEADLINE trở đi, tức là sau khi cuộc đua Top đã
+// khép. Họ đứng ngoài Top (inTop luôn false), finalize không cần chốt gì cho họ, và quyền
+// lợi chỉ còn First (nếu còn suất) hoặc 50.000đ Standard.
+export function isLateRegistrant(user, topDeadline = getCampaign().topDeadline) {
+  if (!topDeadline || !user?.createdAt) return false;
+  return new Date(user.createdAt) >= topDeadline;
+}
+
 // Giai đoạn của MỘT user, quyết định giỏ của họ có được ghi không:
 //   open   — trước TOP_DEADLINE (hoặc chưa có deadline): chọn tạm, sửa thoải mái.
-//   frozen — đã qua deadline nhưng chưa finalize (chưa có user.final): khoá, chờ chốt.
-//   repick — đã finalize, trước REPICK_DEADLINE (hoặc không có hạn này): sửa trong quyền
-//            lợi đã chốt.
-//   closed — đã finalize và qua REPICK_DEADLINE: khoá hẳn.
-// user null (xem thử) đi theo đúng luật đó: không có final nên sau deadline là 'frozen'.
+//   frozen — đã qua deadline, user đăng ký TRƯỚC deadline nhưng chưa finalize (chưa có
+//            user.final): khoá, chờ chốt.
+//   repick — đã finalize (hoặc là người đăng ký muộn), trước REPICK_DEADLINE (hoặc không có
+//            hạn này): sửa trong quyền lợi của mình.
+//   closed — như repick nhưng đã qua REPICK_DEADLINE: khoá hẳn.
+// user null (không có createdAt) sau deadline là 'frozen'.
 export function phaseOf(user, now = new Date()) {
   const { topDeadline, repickDeadline } = getCampaign();
   if (!topDeadline || now < topDeadline) return 'open';
-  if (!user?.final) return 'frozen';
+  if (!user?.final && !isLateRegistrant(user, topDeadline)) return 'frozen';
   if (repickDeadline && now >= repickDeadline) return 'closed';
   return 'repick';
 }

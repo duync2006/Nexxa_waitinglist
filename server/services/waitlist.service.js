@@ -1,6 +1,6 @@
 import { BOOST, LEADERBOARD_PAGE_SIZE, POINTS_PER_INVITE } from '../config/constants.js';
 import { FIRST_SLOTS, TOTAL_SLOTS, entitlementOf, isEarlyJoin, isTopRank, isVip } from '../../shared/catalog.js';
-import { getCampaign, invitesOpen } from '../config/campaign.js';
+import { getCampaign, invitesOpen, isLateRegistrant } from '../config/campaign.js';
 import { User, nextJoinIndex } from '../models/index.js';
 import { randomRefCode } from '../utils/codes.js';
 import { maskEmail } from '../utils/mask.js';
@@ -132,14 +132,15 @@ export async function rankOf(user) {
 //   early     — thuộc First 1.000
 //   joinIndex — thứ tự đăng ký, hiển thị cho người đăng ký sớm ("người thứ #123")
 //   rank      — hạng Top trên toàn bộ user, mọi người đều có
-//   inTop     — đang trong Top 1.000; sau finalize thì lấy theo bản đã chốt (user.final)
+//   inTop     — đang trong Top 1.000; sau finalize thì lấy theo bản đã chốt (user.final).
+//               Người đăng ký sau TOP_DEADLINE luôn false — khớp với getEntitlement.
 //   budget    — ngân sách chọn cổ phiếu: First + Top cộng dồn
 //   vip       — early || inTop; server tự quyết, frontend không phải suy lại luật
 export async function toProfile(user) {
   const early = isEarlyJoin(user.joinIndex);
   const rank = await rankOf(user);
   const final = user.final;
-  const inTop = final ? Boolean(final.inTop) : isTopRank(rank);
+  const inTop = final ? Boolean(final.inTop) : isTopRank(rank) && !isLateRegistrant(user);
   const budget = final ? final.budget : entitlementOf({ early, inTop }).budget;
   return {
     email: user.email,
