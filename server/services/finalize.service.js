@@ -30,7 +30,7 @@ export async function finalizeTop(now = new Date(), { notify = sendRepickEmail }
   if (!topDeadline || now < topDeadline) throw new Error('Chưa tới TOP_DEADLINE');
 
   const prices = await getPriceTable();
-  const result = { total: 0, first: 0, top: 0, both: 0, needsRepick: 0, skipped: 0 };
+  const result = { total: 0, first: 0, top: 0, both: 0, needsRepick: 0, skipped: 0, mailFailed: [] };
   const cursor = User.find({ ...NUMBERED, createdAt: { $lt: topDeadline } })
     .sort(RANK_ORDER)
     .select('email joinIndex final reservation')
@@ -44,7 +44,16 @@ export async function finalizeTop(now = new Date(), { notify = sendRepickEmail }
     await User.bulkWrite(ops, { ordered: false });
     // Gửi mail SAU khi đã ghi: lỗi gửi không làm mất bản chốt, và chạy lại không gửi trùng
     // vì user đã có final.
-    for (const [email, info] of emails) await notify(email, info);
+    // Lỗi gửi mail không được làm dừng run: chạy lại sẽ bỏ qua user đã có final nên mail
+    // sẽ mất hẳn. Ghi lại để operator gửi tay.
+    for (const [email, info] of emails) {
+      try {
+        await notify(email, info);
+      } catch (err) {
+        console.error(`[finalize] Gửi mail chọn lại cho ${email} lỗi: ${err.message}`);
+        result.mailFailed.push(email);
+      }
+    }
     ops = [];
     emails = [];
   };

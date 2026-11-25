@@ -190,4 +190,21 @@ describe('finalizeTop', () => {
     assert.equal(await User.countDocuments({ 'final.inTop': true }), 3);
     assert.equal((await byJoin(1)).final.topRank, 1);
   });
+
+  it('notify lỗi với một người thì vẫn chốt hết và ghi vào mailFailed', async () => {
+    setDeadline();
+    await seed(1005, (j) => (j <= 1000 ? 1 : 0), (j) => (j >= 1001 && j <= 1003 ? basket(['VCB']) : {}));
+    const sent = [];
+    const r = await finalizeTop(new Date(), {
+      notify: async (email) => {
+        if (email === 'u1002@test.local') throw new Error('smtp chết');
+        sent.push(email);
+      }
+    });
+
+    assert.equal(await User.countDocuments({ final: { $exists: true } }), 1005);
+    assert.equal(r.needsRepick, 3);
+    assert.deepEqual(r.mailFailed, ['u1002@test.local']);
+    assert.deepEqual(sent.sort(), ['u1001@test.local', 'u1003@test.local']);
+  });
 });

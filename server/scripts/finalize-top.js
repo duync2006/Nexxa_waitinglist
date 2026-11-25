@@ -14,6 +14,12 @@ try {
     'Giỏ phải chọn lại': r.needsRepick,
     'Đã chốt từ trước (bỏ qua)': r.skipped
   });
+  if (r.mailFailed.length) {
+    console.error(`Gửi mail lỗi cho ${r.mailFailed.length} người, cần gửi tay:
+${r.mailFailed.join('
+')}`);
+    process.exitCode = 1;
+  }
 } catch (err) {
   console.error('Không chốt được Top:', err.message);
   process.exitCode = 1;
