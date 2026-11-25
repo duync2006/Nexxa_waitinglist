@@ -4,3 +4,6 @@ data
 .env
 .env.test
 .playwright-mcp/
+
+.superpowers/
+.worktrees/
