@@ -54,17 +54,10 @@ export default function SignupCard({ me, onJoined, onReset, onOpenReserve, pendi
     setBusy(true);
     setError('');
     try {
-      // Email đã tham gia waitlist thì hiện luôn kết quả hiện tại, không bắt xác thực lại
+      // Email đã đăng ký thì vẫn phải nhập OTP mới xem được kết quả: check chỉ cho biết có
+      // hay không, không trả profile.
       const found = await api.check(email.trim());
-      if (found.exists) {
-        setReturning(true);
-        // await: onJoined còn ghi nhận giỏ cổ phiếu đã chọn trước khi đăng ký. Không chờ thì
-        // màn kết quả hiện ra trước khi lưu xong, và nút "Nhận" bên modal vẫn thấy giỏ rỗng.
-        await onJoined(found.profile);
-        setStep('result');
-        return;
-      }
-      setReturning(false);
+      setReturning(Boolean(found.exists));
       await sendCode();
       setOtp('');
       setStep('otp');
@@ -86,18 +79,11 @@ export default function SignupCard({ me, onJoined, onReset, onOpenReserve, pendi
     setBusy(true);
     setError('');
     try {
-      const profile = await api.verify(email.trim(), otp);
-      setReturning(false);
+      const { profile, alreadyRegistered } = await api.verify(email.trim(), otp);
+      setReturning(Boolean(alreadyRegistered));
       await onJoined(profile);
       setStep('result');
     } catch (err) {
-      // Email vừa được đăng ký ở nơi khác giữa lúc nhập OTP: server trả 409 kèm kết quả hiện tại
-      if (err.data?.alreadyRegistered && err.data.profile) {
-        setReturning(true);
-        await onJoined(err.data.profile);
-        setStep('result');
-        return;
-      }
       setError(err.message);
     } finally {
       setBusy(false);
@@ -157,6 +143,7 @@ export default function SignupCard({ me, onJoined, onReset, onOpenReserve, pendi
           <div className="stack-4">
             <h2 className="h2-card">Nhập mã xác thực</h2>
             <p className="muted">Mã 6 số đã được gửi tới <strong className="ink">{email.trim()}</strong></p>
+            {returning && <p className="muted">Email này đã đăng ký — nhập mã để xem kết quả.</p>}
           </div>
           <label htmlFor="wl-otp" className="label">Mã OTP</label>
           <input

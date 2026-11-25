@@ -73,7 +73,7 @@ function ScrollBox({ label, children }) {
   );
 }
 
-export default function ReserveModal({ open, onClose, me, onGoSignup, initialBasket = [] }) {
+export default function ReserveModal({ open, onClose, me, onGoSignup, initialBasket = [], initialError = null }) {
   // Danh mục từ /api/catalog; quyền chọn và giá đã chốt vẫn từ /api/reserve/options vì
   // chúng phụ thuộc từng người — catalog không biết ai đang mở màn hình này.
   const { pools: allPools, poolStocks, poolOfTicker } = useCatalog();
@@ -82,6 +82,9 @@ export default function ReserveModal({ open, onClose, me, onGoSignup, initialBas
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [done, setDone] = useState(false);
+  // Mã server báo sai nhóm (từ initialError hoặc lần Nhận vừa lỗi). Không tự lọc khỏi giỏ:
+  // người dùng tự thấy và bỏ, giỏ không biến mất âm thầm.
+  const [badTickers, setBadTickers] = useState([]);
   // Quyền chọn + bảng giá do server quyết định: ngân sách, nhóm được phép, giá từng mã.
   const [opts, setOpts] = useState(null);
 
@@ -96,16 +99,18 @@ export default function ReserveModal({ open, onClose, me, onGoSignup, initialBas
     if (!open) return undefined;
     let alive = true;
     setOpts(null);
-    setError('');
+    setBadTickers(initialError?.wrongPool ?? []);
+    setError(initialError?.message || '');
     api
-      .reserveOptions(me?.email)
+      .reserveOptions()
       .then((o) => {
         if (!alive) return;
         setOpts(o);
         // Lựa chọn đã ghi nhận trước đó hiện lại trong ô nhận, để sửa chứ không chọn lại từ đầu.
         // initialBasket là giỏ đã chọn ở lượt mở trước nhưng chưa kịp đăng ký — ưu tiên nó,
         // nếu không người quay lại modal sẽ thấy ô nhận trống trơn như chưa từng chọn gì.
-        setBasket(o.selected?.length ? o.selected : initialBasket);
+        // Có lỗi từ lượt đăng ký vừa rồi thì giỏ chưa ghi được phải thắng bản đã lưu cũ.
+        setBasket(!initialError && o.selected?.length ? o.selected : initialBasket);
       })
       .catch((err) => { if (alive) setError(err.message); });
     return () => { alive = false; };
@@ -133,6 +138,9 @@ export default function ReserveModal({ open, onClose, me, onGoSignup, initialBas
   // Hạng ngoài top 1.000 chỉ được nhóm Standard: ẩn hẳn nhóm VIP thay vì cho chọn rồi báo lỗi.
   const visiblePools = opts ? allPools.filter((p) => opts.pools.includes(p.key)) : allPools;
 
+  // Sai nhóm theo server báo, hoặc nằm ngoài nhóm được phép của người này.
+  const isBad = (t) => badTickers.includes(t) || (Boolean(opts) && !opts.pools.includes(poolOfTicker[t]));
+
   const add = (t) => { setDone(false); setBasket((b) => (b.includes(t) ? b : [...b, t])); };
   const remove = (t) => { setDone(false); setBasket((b) => b.filter((x) => x !== t)); };
   const toggle = (t) => (basket.includes(t) ? remove(t) : add(t));
@@ -144,11 +152,13 @@ export default function ReserveModal({ open, onClose, me, onGoSignup, initialBas
   async function receive() {
     setBusy(true);
     setError('');
+    setBadTickers([]);
     try {
-      await api.reserve(me.email, basket);
+      await api.reserve(basket);
       setDone(true);
     } catch (err) {
       setError(err.message);
+      setBadTickers(err.data?.wrongPool ?? []);
     } finally {
       setBusy(false);
     }
@@ -217,7 +227,7 @@ export default function ReserveModal({ open, onClose, me, onGoSignup, initialBas
             <span className="dropzone-empty">Bấm vào mã bên dưới để chọn</span>
           ) : (
             basket.map((t) => (
-              <span key={t} className="chip picked">
+              <span key={t} className={`chip picked${isBad(t) ? ' chip-err' : ''}`}>
                 {poolOfTicker[t] === 'vip' && <span className="chip-tag">VIP</span>}
                 <span className="chip-t">{t}</span>
                 <button type="button" className="chip-x" onClick={() => remove(t)} aria-label={`Bỏ ${t}`}>×</button>
