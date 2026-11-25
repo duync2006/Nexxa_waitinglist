@@ -8,12 +8,14 @@ try {
   const r = await finalizeTop();
   console.table({
     'Tổng số người xét': r.total,
-    'Người First': r.first,
-    'Người Top': r.top,
+    'Người First (lần này chốt)': r.first,
+    'Người Top (lần này chốt)': r.top,
     'Người cộng dồn (First + Top)': r.both,
-    'Giỏ phải chọn lại': r.needsRepick,
+    'Giỏ phải chọn lại (lần này chốt)': r.needsRepick,
     'Đã chốt từ trước (bỏ qua)': r.skipped
   });
+  // Các dòng trên chỉ là phần LẦN CHẠY NÀY ghi được. Con số chuẩn để đối soát là đếm lại từ DB.
+  console.log(`Tổng số người inTop trong DB (con số chuẩn): ${r.inTopTotal}`);
   if (r.mailFailed.length) {
     console.error(`Gửi mail lỗi cho ${r.mailFailed.length} người, cần gửi tay:`);
     console.error(r.mailFailed.join(', '));

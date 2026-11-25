@@ -54,7 +54,7 @@ describe('basketFits', () => {
   const both = { budget: 100000, pools: ['vip', 'standard'] };
 
   it('giỏ rỗng thì vừa', () => assert.equal(basketFits([], () => undefined, std), true));
-  it('trong ngân sách thì vừa', () => assert.equal(basketFits(['PNJ', 'KDH'], () => 50000, std), true));
+  it('trong ngân sách thì vừa', () => assert.equal(basketFits(['PNJ', 'KDH'], () => 40000, std), true));
   it('đúng bằng ngân sách thì vừa', () => assert.equal(basketFits(['PNJ', 'KDH'], () => 50000, std), true));
   it('vượt ngân sách thì không vừa', () => assert.equal(basketFits(['PNJ', 'KDH', 'DXG'], () => 40000, std), false));
   it('mã ngoài pools thì không vừa', () => assert.equal(basketFits(['VCB'], () => 1, std), false));
@@ -80,6 +80,7 @@ describe('finalizeTop', () => {
 
     assert.equal(r.total, 1005);
     assert.equal(r.top, 1000);
+    assert.equal(r.inTopTotal, 1000, 'con số inTop đếm lại từ DB sau khi chạy');
     assert.equal(await User.countDocuments({ 'final.inTop': true }), 1000);
     assert.equal(await User.countDocuments({ final: { $exists: true } }), 1005);
     assert.equal((await byJoin(1)).final.topRank, 1);
@@ -109,7 +110,29 @@ describe('finalizeTop', () => {
 
     assert.equal(r.total, 12);
     assert.equal(r.skipped, 12);
+    assert.equal(r.top, 0, 'lần chạy lại không chốt ai nên không đếm ai');
+    assert.equal(r.inTopTotal, 12, 'nhưng con số từ DB vẫn đúng');
     assert.deepEqual(after, before);
+  });
+
+  it('nhiều lần chạy song song: mỗi người chỉ được đếm và gửi mail đúng một lần', async () => {
+    setDeadline();
+    // Giỏ 300.000đ vượt cả ngân sách cộng dồn 200.000đ -> ai cũng phải chọn lại.
+    await seed(6, () => 0, () => basket(['VCB', 'FPT', 'HPG'], 100000));
+    const mails = [];
+    const notify = async (email) => { mails.push(email); };
+    const runs = await Promise.all([1, 2, 3].map(() => finalizeTop(new Date(), { notify })));
+
+    assert.equal(await User.countDocuments({ final: { $exists: true } }), 6);
+    assert.deepEqual([...mails].sort(), Array.from({ length: 6 }, (_, i) => `u${i + 1}@test.local`).sort());
+    const sum = (k) => runs.reduce((n, r) => n + r[k], 0);
+    assert.equal(sum('needsRepick'), 6);
+    assert.equal(sum('top'), 6);
+    assert.equal(sum('first'), 6);
+    assert.equal(sum('both'), 6);
+    // Người đã bị lần chạy khác chốt trước thì tính là bỏ qua.
+    assert.equal(sum('skipped'), 3 * 6 - 6);
+    for (const r of runs) assert.equal(r.inTopTotal, 6);
   });
 
   it('người Top bị đẩy ra có giỏ chứa VCB thì needsRepick và có email', async () => {

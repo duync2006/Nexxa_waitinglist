@@ -36,32 +36,50 @@ export async function finalizeTop(now = new Date(), { notify = sendRepickEmail }
   if (!topDeadline || now < topDeadline) throw new Error('Chưa tới TOP_DEADLINE');
 
   const prices = await getPriceTable();
-  const result = { total: 0, first: 0, top: 0, both: 0, needsRepick: 0, skipped: 0, mailFailed: [] };
+  const result = {
+    total: 0, first: 0, top: 0, both: 0, needsRepick: 0, skipped: 0, mailFailed: [], inTopTotal: 0
+  };
   const cursor = User.find({ ...NUMBERED, createdAt: { $lt: topDeadline } })
     .sort(RANK_ORDER)
     .select('email joinIndex final reservation')
     .lean()
     .cursor();
 
-  let ops = [];
-  let emails = [];
+  // Mỗi phần tử: { u, final }. Ghi theo lô nhưng TỪNG user một lệnh updateOne có điều kiện
+  // `final` chưa có, chạy song song trong lô. Không dùng bulkWrite vì nó chỉ trả tổng số
+  // matched của cả lô: một lần chạy khác chen vào chốt trước vài người thì không biết là ai,
+  // và sẽ đếm trùng lẫn gửi mail trùng cho họ.
+  let batch = [];
   const flush = async () => {
-    if (!ops.length) return;
-    await User.bulkWrite(ops, { ordered: false });
-    // Gửi mail SAU khi đã ghi: lỗi gửi không làm mất bản chốt, và chạy lại không gửi trùng
-    // vì user đã có final.
+    if (!batch.length) return;
+    const writes = await Promise.all(
+      batch.map(({ u, final }) =>
+        User.updateOne({ _id: u._id, final: { $exists: false } }, { $set: { final } })
+      )
+    );
+    const mine = batch.filter((_, i) => writes[i].matchedCount === 1);
+    // Người bị lần chạy khác chốt trước: lần này không ghi gì cho họ, tính là bỏ qua.
+    result.skipped += batch.length - mine.length;
+    for (const { final } of mine) {
+      if (final.early) result.first += 1;
+      if (final.inTop) result.top += 1;
+      if (final.early && final.inTop) result.both += 1;
+      if (final.needsRepick) result.needsRepick += 1;
+    }
+    // Gửi mail SAU khi đã ghi, và chỉ cho người mà CHÍNH lần chạy này ghi được: lỗi gửi
+    // không làm mất bản chốt, chạy lại hay chạy song song cũng không gửi trùng.
     // Lỗi gửi mail không được làm dừng run: chạy lại sẽ bỏ qua user đã có final nên mail
     // sẽ mất hẳn. Ghi lại để operator gửi tay.
-    for (const [email, info] of emails) {
+    for (const { u, final } of mine) {
+      if (!final.needsRepick) continue;
       try {
-        await notify(email, info);
+        await notify(u.email, { budget: final.budget, pools: final.pools, repickDeadline });
       } catch (err) {
-        console.error(`[finalize] Gửi mail chọn lại cho ${email} lỗi: ${err.message}`);
-        result.mailFailed.push(email);
+        console.error(`[finalize] Gửi mail chọn lại cho ${u.email} lỗi: ${err.message}`);
+        result.mailFailed.push(u.email);
       }
     }
-    ops = [];
-    emails = [];
+    batch = [];
   };
 
   let position = 0;
@@ -81,22 +99,13 @@ export async function finalizeTop(now = new Date(), { notify = sendRepickEmail }
     const tickers = u.reservation?.tickers ?? [];
     const needsRepick = !basketFits(tickers, priceOf, { budget, pools });
 
-    const final = { early, topRank: position, inTop, budget, pools, finalizedAt: now, needsRepick };
-    ops.push({
-      // Điều kiện final chưa có: hai lần chạy song song không ghi đè nhau.
-      updateOne: { filter: { _id: u._id, final: { $exists: false } }, update: { $set: { final } } }
-    });
-    if (needsRepick) {
-      emails.push([u.email, { budget, pools, repickDeadline }]);
-      result.needsRepick += 1;
-    }
-    if (early) result.first += 1;
-    if (inTop) result.top += 1;
-    if (early && inTop) result.both += 1;
-
-    if (ops.length >= BATCH) await flush();
+    batch.push({ u, final: { early, topRank: position, inTop, budget, pools, finalizedAt: now, needsRepick } });
+    if (batch.length >= BATCH) await flush();
   }
   await flush();
+  // Con số chuẩn để đối soát: đếm lại từ DB, không cộng dồn từ các lần chạy (chạy lại hay
+  // chạy song song thì `top` của một lần chỉ là phần lần đó ghi được).
+  result.inTopTotal = await User.countDocuments({ 'final.inTop': true });
   return result;
 }
 

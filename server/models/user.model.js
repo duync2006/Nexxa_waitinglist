@@ -4,8 +4,9 @@ import { MAX_EMAIL_LENGTH } from '../config/constants.js';
 const { Schema, model } = mongoose;
 
 // CẢNH BÁO: Mongoose mặc định strict:true nên field nào không khai báo ở đây sẽ bị âm thầm
-// bỏ đi mỗi lần ghi. Collection users trong DB thật đang có đúng 11 field dưới đây —
-// bớt một field là lần update sau xoá sạch nó khỏi document cũ.
+// bỏ đi mỗi lần ghi. Collection users trong DB thật có 11 field dưới đây, cộng `final` (field
+// thứ 12, do `npm run finalize` ghi sau TOP_DEADLINE) — bớt một field là lần update sau xoá
+// sạch nó khỏi document cũ.
 const reservationSchema = new Schema(
   {
     tickers: { type: [String], default: [] },
