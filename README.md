@@ -237,6 +237,8 @@ npm run prices       # làm mới snapshot giá cổ phiếu trong collection pr
 npm run finalize     # sau TOP_DEADLINE: chốt Top 1.000 — xem mục "Chốt Top 1.000"
 npm run close-repick # sau REPICK_DEADLINE: cắt giỏ người không chọn lại
 
-# Dữ liệu demo để xem tay màn hình Reserve — chỉ chạy được trên database _test
-node --env-file=.env.test server/scripts/seed-demo.js
+# Dữ liệu demo (bịa): 352 người đăng ký, 157 người trên bảng Top — xem kịch bản đầu file
+# server/scripts/seed-demo.js. Nạp vào database riêng nexxa_waitlist_demo (XOÁ SẠCH DB đó).
+npm run seed:demo
+npm run dev:demo     # chạy app trên database demo
 ```
