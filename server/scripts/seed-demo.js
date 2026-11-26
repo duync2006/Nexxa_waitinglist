@@ -40,10 +40,10 @@ if (!/_(demo|test)$/.test(env.mongoDb)) {
 }
 
 // ── Thông số kịch bản ────────────────────────────────────────────────────────────────
-const TOTAL_USERS = 295;
+const TOTAL_USERS = 352;
 // [số lượt mời, số người] — tổng số người phải là 157.
-// const INVITE_PLAN = [[14, 1], [11, 1], [9, 1], [7, 2], [5, 3], [4, 6], [3, 12], [2, 30], [1, 101]];
-const INVITE_PLAN = [[14, 1], [11, 1], [9, 1], [7, 2], [5, 3]]
+const INVITE_PLAN = [[14, 1], [11, 1], [9, 1], [7, 2], [5, 3], [4, 6], [3, 12], [2, 30], [1, 101]];
+// const INVITE_PLAN = [[14, 1], [11, 1], [9, 1], [7, 2], [5, 3]]
 // , [4, 6], [3, 12], [2, 30], [1, 101]];
 const CAMPAIGN_DAYS = 12;
 const LAST_JOIN_AGO_MS = 3 * 60 * 1000; // người mới nhất đăng ký 3 phút trước
