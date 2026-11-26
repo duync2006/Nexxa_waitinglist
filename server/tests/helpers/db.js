@@ -1,7 +1,7 @@
 import { env } from '../../config/env.js';
 import { connectDb, disconnectDb } from '../../db/connect.js';
-import { User, Otp, Counter, Price } from '../../models/index.js';
-import { FIRST_SLOTS, RESERVABLE, groupTypeOfTicker } from '../../../shared/catalog.js';
+import { User, Otp, Counter, Price, Session } from '../../models/index.js';
+import { RESERVABLE, groupTypeOfTicker } from '../../../shared/catalog.js';
 
 // CHỐT CHẶN: test xoá sạch collection sau mỗi ca, nên tuyệt đối không được trỏ vào DB thật.
 // Chỉ chấp nhận database có tên kết thúc bằng _test.
@@ -21,7 +21,7 @@ export async function teardownDb() {
 }
 
 export async function resetDb() {
-  await Promise.all([User.deleteMany({}), Otp.deleteMany({}), Counter.deleteMany({}), Price.deleteMany({})]);
+  await Promise.all([User.deleteMany({}), Otp.deleteMany({}), Counter.deleteMany({}), Price.deleteMany({}), Session.deleteMany({})]);
 }
 
 // Nạp bảng giá giả cho DB test. Reserve đọc snapshot nên không có bảng giá là 503 —
@@ -49,13 +49,7 @@ export async function seedPrices(overrides = {}, { base = 20000, skip = [] } = {
   await Price.insertMany(rows);
 }
 
-// Đẩy bộ đếm joinIndex qua mốc First 1.000: người đăng ký qua API sau lệnh này rơi vào
-// nhóm đua Top 1.000 (có hạng theo điểm) thay vì nhóm đăng ký sớm (rank null).
-export async function startRaceJoins() {
-  await Counter.updateOne({ _id: 'users' }, { $set: { seq: FIRST_SLOTS } }, { upsert: true });
-}
-
-// Đưa một email qua trọn vòng request-otp → verify, trả về profile.
+// Đưa một email qua trọn vòng request-otp → verify, trả về response có body { profile, token, alreadyRegistered? }.
 // devOtp chỉ có ở môi trường không phải production, đúng thứ test cần.
 export async function joinViaApi(request, app, email, ref) {
   const otpRes = await request(app).post('/api/waitlist/request-otp').send({ email, ref });
@@ -64,3 +58,6 @@ export async function joinViaApi(request, app, email, ref) {
     .send({ email, otp: otpRes.body.devOtp });
   return verifyRes;
 }
+
+// Gắn token phiên vào request: authed(request(app).post('/api/waitlist/me'), token)
+export const authed = (req, token) => req.set('Authorization', 'Bearer ' + token);

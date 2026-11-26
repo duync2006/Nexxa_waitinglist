@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { api } from './lib/api.js';
+import { api, session } from './lib/api.js';
 import { FIRST_SLOTS, TOTAL_SLOTS } from '../shared/catalog.js';
 import Logo from './components/Logo.jsx';
 import msbMark from './assets/msb-mark.png';
@@ -34,15 +34,17 @@ export default function App() {
     firstSlots: FIRST_SLOTS,
     firstRemaining: FIRST_SLOTS,
     topSlots: TOTAL_SLOTS,
-    topRemaining: TOTAL_SLOTS
+    topRemaining: TOTAL_SLOTS,
+    topCutoff: null,
+    topStart: null,
+    topDeadline: null
   });
   // Người đăng ký gần nhất, email đã che sẵn ở server. Đi ké /api/stats nên tự làm mới
   // theo cùng nhịp 30 giây, không thêm request nào.
   const [recent, setRecent] = useState([]);
-  // Không khôi phục từ localStorage: tải lại trang là về form đăng ký, không phải màn kết
-  // quả của lượt trước. Trang này là trang mời đăng ký — mở lên mà thấy kết quả cũ thì nó
-  // hết làm được việc của mình, và trên máy dùng chung người sau nhìn thấy email người trước.
-  // Muốn xem lại kết quả chỉ cần nhập lại email: api.check trả về ngay, không phải nhập OTP.
+  // Phiên nằm ở sessionStorage (theo tab): tải lại trong cùng tab vẫn thấy kết quả, mở tab mới
+  // thì về form đăng ký. Xem lại kết quả luôn phải nhập OTP, nên người sau trên máy dùng chung
+  // không đọc được email người trước.
   const [me, setMe] = useState(null);
   const [theme, setTheme] = useState(loadTheme);
   const [reserveOpen, setReserveOpen] = useState(false);
@@ -50,6 +52,10 @@ export default function App() {
   // modal: modal đóng lại khi về form đăng ký, mà lựa chọn thì phải sống qua bước đó — chọn
   // xong rồi mất giỏ là mất luôn lý do người ta điền email.
   const [pendingBasket, setPendingBasket] = useState([]);
+  // Lỗi khi ghi nhận giỏ ngay sau đăng ký: modal mở lại và hiện lỗi này, giỏ vẫn còn nguyên.
+  const [reserveError, setReserveError] = useState(null);
+  // Thông báo hiện ở form email khi phiên hết hạn giữa lúc đang chọn cổ phiếu.
+  const [signupNotice, setSignupNotice] = useState('');
 
   // Gọi lại mỗi 30 giây: con số nhúc nhích ngay trước mắt người đang đọc trang có sức ép
   // khác hẳn một con số tĩnh nạp một lần lúc mở. Tab bị ẩn thì ngừng gọi — không ai nhìn.
@@ -64,7 +70,10 @@ export default function App() {
             firstSlots: s.firstSlots ?? prev.firstSlots,
             firstRemaining: s.firstRemaining ?? prev.firstRemaining,
             topSlots: s.totalSlots ?? prev.topSlots,
-            topRemaining: s.topRemaining ?? prev.topRemaining
+            topRemaining: s.topRemaining ?? prev.topRemaining,
+            topCutoff: s.topCutoff ?? null,
+            topStart: s.topStart ?? null,
+            topDeadline: s.topDeadline ?? null
           }));
           setRecent(s.recent ?? []);
         })
@@ -88,18 +97,66 @@ export default function App() {
   // Xoá profile còn sót từ bản cũ. Chạy một lần lúc mở trang.
   useEffect(dropSavedProfile, []);
 
+  // Khôi phục phiên khi mở trang. Token hỏng thì api tự xoá và phát nexxa:logout.
+  useEffect(() => {
+    if (!session.get()) return undefined;
+    let alive = true;
+    api.me().then((p) => { if (alive) setMe(p); }).catch(() => {});
+    return () => { alive = false; };
+  }, []);
+
+  // Token hết hạn giữa chừng: về form đăng ký nhưng KHÔNG đụng tới giỏ đã chọn.
+  useEffect(() => {
+    const onLogout = () => setMe(null);
+    window.addEventListener('nexxa:logout', onLogout);
+    return () => window.removeEventListener('nexxa:logout', onLogout);
+  }, []);
+
   const handleJoined = async (profile) => {
     setMe(profile);
+    setSignupNotice('');
 
     // Đã chọn cổ phiếu trước khi đăng ký thì ghi nhận luôn, không bắt mở lại modal chọn lần
-    // hai. Lỗi ở đây nuốt im: đăng ký đã thành công rồi, giỏ vẫn còn trong modal để thử lại.
+    // hai. Thất bại (vd. mã VIP mà người này không đủ quyền) thì giữ giỏ, mở lại modal kèm lỗi
+    // để người dùng sửa — đăng ký đã thành công, chỉ phần giỏ cần chỉnh.
     if (pendingBasket.length) {
-      try { await api.reserve(profile.email, pendingBasket); } catch { /* bỏ qua */ }
-      setPendingBasket([]);
+      try {
+        await api.reserve(pendingBasket);
+        setPendingBasket([]);
+        // Ghi giỏ có thể xoá cờ needsRepick: lấy lại profile để thông báo chọn lại biến mất.
+        refreshMe();
+      } catch (err) {
+        setReserveError({ message: err.message, wrongPool: err.data?.wrongPool });
+        setReserveOpen(true);
+      }
     }
   };
 
-  const handleReset = () => setMe(null);
+  // Lấy lại profile sau khi ghi giỏ (needsRepick có thể vừa hết). Lỗi thì giữ profile cũ.
+  // Kiểm tra lại token lúc có kết quả: người dùng bấm "Dùng email khác" giữa chừng thì không
+  // được dựng lại profile của người trước.
+  const refreshMe = () => {
+    const token = session.get();
+    api.me().then((p) => { if (token && session.get() === token) setMe(p); }).catch(() => {});
+  };
+
+  // Giỏ đã ghi xong trong modal: giỏ tạm của lượt chưa đăng nhập không còn việc gì để làm.
+  // Không xoá ở đây thì nó nằm lại tới lúc "Dùng email khác" và bị áp lên giỏ của người sau.
+  const handleSaved = () => {
+    setPendingBasket([]);
+    setReserveError(null);
+    refreshMe();
+  };
+
+  // "Dùng email khác": người sau trên cùng tab không được thừa hưởng gì của người trước —
+  // giỏ tạm, lỗi giỏ, thông báo phiên hết hạn đều thuộc về người trước.
+  const handleReset = async () => {
+    try { await api.logout(); } catch { /* bỏ qua */ }
+    setPendingBasket([]);
+    setReserveError(null);
+    setSignupNotice('');
+    setMe(null);
+  };
 
   // Định tuyến bằng hash: site build dưới /waitlist/ nên không đụng tới đường dẫn, và không
   // cần thêm thư viện router cho đúng một trang phụ.
@@ -137,9 +194,18 @@ export default function App() {
 
       <ReserveModal
         open={reserveOpen}
-        onClose={() => setReserveOpen(false)}
+        onClose={() => { setReserveOpen(false); setReserveError(null); }}
         me={me}
+        initialError={reserveError}
+        onSessionExpired={(basket, message) => {
+          setPendingBasket(basket);
+          setSignupNotice(message);
+          setReserveOpen(false);
+          setReserveError(null);
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        }}
         initialBasket={pendingBasket}
+        onSaved={handleSaved}
         onGoSignup={(basket) => {
           setPendingBasket(basket);
           setReserveOpen(false);
@@ -175,6 +241,7 @@ export default function App() {
             onReset={handleReset}
             onOpenReserve={() => setReserveOpen(true)}
             pendingBasket={pendingBasket}
+            notice={signupNotice}
           />
         {/* <Scarcity slots={slots} /> */}
         </section>

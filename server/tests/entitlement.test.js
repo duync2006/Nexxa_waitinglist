@@ -5,7 +5,8 @@ import { createApp } from '../app.js';
 import { Price, User } from '../models/index.js';
 import { FIRST_SLOTS, RESERVABLE, TOTAL_SLOTS, groupTypeOfTicker } from '../../shared/catalog.js';
 import { checkBudgetFeasibility, getPriceTable, refreshPrices } from '../services/price.service.js';
-import { resetDb, seedPrices, setupDb, teardownDb } from './helpers/db.js';
+import { createSession } from '../services/session.service.js';
+import { authed, resetDb, seedPrices, setupDb, teardownDb } from './helpers/db.js';
 
 const app = createApp();
 
@@ -18,9 +19,10 @@ beforeEach(async () => {
 
 // Tạo user trực tiếp trong DB: đi qua API thì 1.000 user mất vài phút, mà ở đây chỉ cần
 // invites và joinIndex đúng để rankOf tính ra hạng mong muốn.
-// Mặc định tạo trong nhóm đua (joinIndex > FIRST_SLOTS) vì đó là nhóm có hạng theo điểm.
-const RACE_START = FIRST_SLOTS + 1;
-async function makeUsers(count, { startIndex = RACE_START, invites = 0 } = {}) {
+// Mặc định tạo từ người #FIRST_SLOTS+1 (không thuộc First); ca nào cần người First thì tự
+// truyền startIndex.
+const AFTER_FIRST = FIRST_SLOTS + 1;
+async function makeUsers(count, { startIndex = AFTER_FIRST, invites = 0 } = {}) {
   const docs = [];
   for (let i = 0; i < count; i++) {
     const n = startIndex + i;
@@ -40,29 +42,120 @@ async function makeUsers(count, { startIndex = RACE_START, invites = 0 } = {}) {
   return docs;
 }
 
-// Tạo đúng `rank - 1` người đứng trên trong nhóm đua rồi trả về email của người ở hạng `rank`.
+// Tạo đúng `rank - 1` người đứng trên (không thuộc First) rồi trả về email của người ở hạng `rank`.
+// Ai cũng đã mời 1 bạn: chỉ người có ít nhất 1 lượt mời mới được xếp hạng Top.
 async function userAtRank(rank) {
-  if (rank > 1) await makeUsers(rank - 1);
-  const [me] = await makeUsers(1, { startIndex: RACE_START + rank - 1 });
+  if (rank > 1) await makeUsers(rank - 1, { invites: 1 });
+  const [me] = await makeUsers(1, { startIndex: AFTER_FIRST + rank - 1, invites: 1 });
   return me.email;
 }
 
-const options = (email) => request(app).post('/api/reserve/options').send({ email });
+// Cấp token phiên cho user tạo thẳng trong DB rồi gọi API bằng token đó.
+const tokenOf = async (email) => createSession((await User.findOne({ email }))._id);
+const options = async (email) => authed(request(app).post('/api/reserve/options'), await tokenOf(email));
+const reserve = async (email, tickers) =>
+  authed(request(app).post('/api/reserve'), await tokenOf(email)).send({ tickers });
 
-describe('POST /api/reserve/options', () => {
-  it(`hạng ${TOTAL_SLOTS} được 100.000đ và cả hai nhóm`, async () => {
+describe('Luật quyền lợi: First và Top song song, cộng dồn', () => {
+  it('chỉ First (chưa mời ai) được 100.000đ, không có hạng Top', async () => {
+    const [early] = await makeUsers(1, { startIndex: 1, invites: 0 });
+
+    const res = await options(early.email);
+
+    assert.equal(res.status, 200);
+    assert.equal(res.body.early, true);
+    assert.equal(res.body.rank, null);
+    assert.equal(res.body.inTop, false);
+    assert.equal(res.body.budget, 100000);
+    assert.deepEqual(res.body.pools, ['vip', 'standard']);
+  });
+
+  it('First đã mời nhưng bị đẩy xuống hạng 1.001 thì chỉ còn 100.000đ của First', async () => {
+    const [early] = await makeUsers(1, { startIndex: 1, invites: 1 });
+    // 1.000 người vào sau, mỗi người mời được 2 bạn: đẩy người #1 xuống hạng 1.001.
+    await makeUsers(TOTAL_SLOTS, { invites: 2 });
+
+    const res = await options(early.email);
+
+    assert.equal(res.body.early, true);
+    assert.equal(res.body.rank, TOTAL_SLOTS + 1);
+    assert.equal(res.body.inTop, false);
+    assert.equal(res.body.budget, 100000);
+  });
+
+  it('chỉ Top được 100.000đ', async () => {
     const email = await userAtRank(TOTAL_SLOTS);
 
     const res = await options(email);
 
     assert.equal(res.status, 200);
+    assert.equal(res.body.early, false);
     assert.equal(res.body.rank, TOTAL_SLOTS);
+    assert.equal(res.body.inTop, true);
     assert.equal(res.body.budget, 100000);
     assert.deepEqual(res.body.pools, ['vip', 'standard']);
-    assert.equal(res.body.locked, false);
     assert.equal(res.body.preview, false);
+    assert.equal(res.body.phase, 'open');
   });
 
+  it('chưa đủ 1.000 người đi mời thì mời 1 bạn là vào Top', async () => {
+    // 1.000 người First đều chưa mời ai: không ai trong số họ chiếm chỗ Top.
+    await makeUsers(FIRST_SLOTS, { startIndex: 1 });
+    const [me] = await makeUsers(1, { invites: 1 });
+
+    const res = await options(me.email);
+
+    assert.equal(res.body.rank, 1);
+    assert.equal(res.body.inTop, true);
+    assert.equal(res.body.budget, 100000);
+  });
+
+  it('First và Top (đã mời ít nhất 1 bạn) được 200.000đ', async () => {
+    const [both] = await makeUsers(1, { startIndex: FIRST_SLOTS, invites: 1 }); // người đăng ký thứ 1.000
+
+    const res = await options(both.email);
+
+    assert.equal(res.body.early, true);
+    assert.equal(res.body.inTop, true);
+    assert.equal(res.body.budget, 200000);
+    assert.deepEqual(res.body.pools, ['vip', 'standard']);
+  });
+
+  it('First và Top chọn chung một giỏ tới 200.000đ', async () => {
+    const [both] = await makeUsers(1, { startIndex: 1, invites: 1 });
+    const tickers = ['VCB', 'FPT', 'HPG', 'MBB', 'ACB', 'PNJ', 'PLX', 'TPB', 'REE', 'DGC'];
+
+    const res = await reserve(both.email, tickers);
+
+    assert.equal(res.status, 200, res.body.error);
+    assert.equal(res.body.totalValue, 200000);
+    assert.equal(res.body.budget, 200000);
+  });
+
+  it('không thuộc First và chưa mời ai thì 50.000đ, chỉ standard, không có hạng', async () => {
+    const [late] = await makeUsers(1, { startIndex: FIRST_SLOTS + 1 });
+
+    const res = await options(late.email);
+
+    assert.equal(res.body.early, false);
+    assert.equal(res.body.rank, null);
+    assert.equal(res.body.inTop, false);
+    assert.equal(res.body.budget, 50000);
+    assert.deepEqual(res.body.pools, ['standard']);
+  });
+
+  it('First có ít nhất 1 lượt mời thì có hạng Top là số', async () => {
+    const [early] = await makeUsers(1, { startIndex: 1, invites: 1 });
+    await makeUsers(3, { invites: 2 });
+
+    const res = await options(early.email);
+
+    assert.equal(res.body.early, true);
+    assert.equal(res.body.rank, 4);
+  });
+});
+
+describe('POST /api/reserve/options', () => {
   it(`hạng ${TOTAL_SLOTS + 1} chỉ được 50.000đ và nhóm Standard`, async () => {
     const email = await userAtRank(TOTAL_SLOTS + 1);
 
@@ -82,49 +175,19 @@ describe('POST /api/reserve/options', () => {
     assert.equal(typeof res.body.prices.PNJ, 'number');
   });
 
-  it('người thuộc First 1.000 chắc VIP dù 0 điểm và bị cả nghìn người vượt điểm', async () => {
-    const [early] = await makeUsers(1, { startIndex: FIRST_SLOTS }); // người đăng ký thứ 1.000
-    await makeUsers(1500, { invites: 5 });
-
-    const res = await options(early.email);
-
-    assert.equal(res.body.early, true);
-    assert.equal(res.body.rank, null);
-    assert.equal(res.body.budget, 100000);
-    assert.deepEqual(res.body.pools, ['vip', 'standard']);
-  });
-
-  it(`người đăng ký thứ ${FIRST_SLOTS + 1} không có suất sớm, xét theo hạng đua`, async () => {
-    const [late] = await makeUsers(1, { startIndex: FIRST_SLOTS + 1 });
-
-    const res = await options(late.email);
-
-    assert.equal(res.body.early, false);
-    assert.equal(res.body.rank, 1);
-    assert.equal(res.body.budget, 100000);
-  });
-
-  it('First 1.000 không chiếm chỗ trong Top 1.000 của nhóm đua', async () => {
-    await makeUsers(FIRST_SLOTS, { startIndex: 1, invites: 9 }); // đủ First 1.000, điểm cao
-    const email = await userAtRank(TOTAL_SLOTS);
-
-    const res = await options(email);
-
-    assert.equal(res.body.rank, TOTAL_SLOTS);
-    assert.equal(res.body.budget, 100000);
-  });
-
-  it('email rỗng thì trả bản xem thử với mức cao nhất', async () => {
-    const res = await options('');
+  it('không token thì trả bản xem thử với mức 100.000đ, cả hai nhóm', async () => {
+    const res = await request(app).post('/api/reserve/options').send({});
 
     assert.equal(res.body.preview, true);
     assert.equal(res.body.rank, null);
+    assert.equal(res.body.inTop, false);
+    assert.equal(res.body.phase, 'open');
     assert.equal(res.body.budget, 100000);
     assert.deepEqual(res.body.pools, ['vip', 'standard']);
   });
 
-  it('email chưa đăng ký cũng chỉ là bản xem thử, không phải lỗi', async () => {
-    const res = await options('nguoi-la@test.local');
+  it('token sai cũng chỉ là bản xem thử, không phải lỗi', async () => {
+    const res = await authed(request(app).post('/api/reserve/options'), 'token-gia');
 
     assert.equal(res.status, 200);
     assert.equal(res.body.preview, true);
@@ -132,7 +195,7 @@ describe('POST /api/reserve/options', () => {
 
   it('trả lại lựa chọn đã ghi nhận để sửa', async () => {
     const email = await userAtRank(5);
-    await request(app).post('/api/reserve').send({ email, tickers: ['VCB'] });
+    await reserve(email, ['VCB']);
 
     const res = await options(email);
 
@@ -140,43 +203,58 @@ describe('POST /api/reserve/options', () => {
   });
 });
 
-describe('Chốt quyền lợi ở lần Reserve đầu tiên', () => {
-  it('hạng trôi xuống quá 1.000 vẫn giữ ngân sách và nhóm đã chốt', async () => {
+describe('Quyền lợi tính theo hạng hiện tại, không chốt ở lần Reserve đầu', () => {
+  it('hạng trôi xuống quá 1.000 thì ngân sách và nhóm tính lại theo hạng mới', async () => {
     const email = await userAtRank(3);
-    const first = await request(app).post('/api/reserve').send({ email, tickers: ['VCB'] });
+    const first = await reserve(email, ['VCB']);
     assert.equal(first.status, 200);
     assert.equal(first.body.budget, 100000);
 
     // Đẩy user xuống dưới hạng 1.000: thêm 1.200 người nhiều điểm hơn.
-    await makeUsers(1200, { startIndex: 10000, invites: 1 });
+    await makeUsers(1200, { startIndex: 10000, invites: 2 });
 
     const res = await options(email);
 
-    assert.equal(res.body.locked, true);
-    assert.equal(res.body.budget, 100000);
-    assert.deepEqual(res.body.pools, ['vip', 'standard']);
-    assert.equal(res.body.rank, 3, 'lockedRank phải là hạng lúc chốt, không phải hạng hiện tại');
+    assert.equal(res.body.rank, 1203);
+    assert.equal(res.body.inTop, false);
+    assert.equal(res.body.budget, 50000);
+    assert.deepEqual(res.body.pools, ['standard']);
+    assert.equal(res.body.locked, undefined, 'không còn khái niệm chốt ở lần Reserve đầu');
   });
 
-  it('vẫn chọn được mã VIP sau khi hạng đã trôi', async () => {
+  it('hạng đã trôi thì không chọn được mã VIP nữa', async () => {
     const email = await userAtRank(3);
-    await request(app).post('/api/reserve').send({ email, tickers: ['VCB'] });
-    await makeUsers(1200, { startIndex: 10000, invites: 1 });
+    await reserve(email, ['VCB']);
+    await makeUsers(1200, { startIndex: 10000, invites: 2 });
 
-    const res = await request(app).post('/api/reserve').send({ email, tickers: ['FPT', 'HPG'] });
+    const res = await reserve(email, ['VCB', 'PNJ']);
 
-    assert.equal(res.status, 200);
-    assert.deepEqual(res.body.tickers, ['FPT', 'HPG']);
+    assert.equal(res.status, 400);
+    assert.deepEqual(res.body.wrongPool, ['VCB']);
+  });
+
+  it('reservation.budget kiểu cũ không còn được tôn trọng', async () => {
+    const email = await userAtRank(TOTAL_SLOTS + 1);
+    await User.updateOne(
+      { email },
+      { $set: { reservation: { tickers: ['VCB'], lockedRank: 3, budget: 100000, allowedPools: ['vip', 'standard'] } } }
+    );
+
+    const res = await options(email);
+
+    assert.equal(res.body.rank, TOTAL_SLOTS + 1);
+    assert.equal(res.body.budget, 50000);
+    assert.deepEqual(res.body.pools, ['standard']);
   });
 
   it('giá đã chốt được giữ nguyên dù snapshot đổi', async () => {
     const email = await userAtRank(3);
-    await request(app).post('/api/reserve').send({ email, tickers: ['VCB'] });
+    await reserve(email, ['VCB']);
 
-    // Giá VCB tăng vọt sau khi đã chốt
+    // Giá VCB tăng vọt sau khi đã chọn
     await Price.updateOne({ _id: 'VCB' }, { $set: { price: 95000 } });
 
-    const res = await request(app).post('/api/reserve').send({ email, tickers: ['VCB', 'FPT'] });
+    const res = await reserve(email, ['VCB', 'FPT']);
 
     assert.equal(res.status, 200, res.body.error);
     assert.equal(res.body.totalValue, 40000, 'phải dùng giá đã đông cứng, không phải giá mới');
@@ -187,7 +265,7 @@ describe('Ngân sách và nhóm khi Reserve', () => {
   it('tổng vượt ngân sách thì 400 kèm con số', async () => {
     const email = await userAtRank(TOTAL_SLOTS + 1); // ngân sách 50.000đ, mỗi mã 20.000đ
 
-    const res = await request(app).post('/api/reserve').send({ email, tickers: ['PNJ', 'PLX', 'TPB'] });
+    const res = await reserve(email, ['PNJ', 'PLX', 'TPB']);
 
     assert.equal(res.status, 400);
     assert.match(res.body.error, /vượt ngân sách/);
@@ -198,7 +276,7 @@ describe('Ngân sách và nhóm khi Reserve', () => {
   it('bậc Standard chọn mã VIP thì 400 và nêu đích danh mã', async () => {
     const email = await userAtRank(TOTAL_SLOTS + 1);
 
-    const res = await request(app).post('/api/reserve').send({ email, tickers: ['PNJ', 'VCB'] });
+    const res = await reserve(email, ['PNJ', 'VCB']);
 
     assert.equal(res.status, 400);
     assert.deepEqual(res.body.wrongPool, ['VCB']);
@@ -209,26 +287,27 @@ describe('Ngân sách và nhóm khi Reserve', () => {
     const email = await userAtRank(5);
     await Price.deleteOne({ _id: 'FPT' });
 
-    const res = await request(app).post('/api/reserve').send({ email, tickers: ['VCB', 'FPT'] });
+    const res = await reserve(email, ['VCB', 'FPT']);
 
     assert.equal(res.status, 503);
     assert.deepEqual(res.body.missing, ['FPT']);
   });
 
-  it('reservation lưu lại đủ phần đã chốt', async () => {
+  it('reservation lưu giỏ, giá đã chốt và tổng; không ghi quyền lợi kiểu cũ', async () => {
     const email = await userAtRank(5);
 
-    await request(app).post('/api/reserve').send({ email, tickers: ['VCB', 'FPT'] });
+    await reserve(email, ['VCB', 'FPT']);
 
     const saved = await User.findOne({ email }).lean();
-    assert.equal(saved.reservation.lockedRank, 5);
-    assert.equal(saved.reservation.budget, 100000);
-    assert.deepEqual(saved.reservation.allowedPools, ['vip', 'standard']);
+    assert.deepEqual(saved.reservation.tickers, ['VCB', 'FPT']);
     assert.equal(saved.reservation.totalValue, 40000);
     assert.deepEqual(
       saved.reservation.lockedPrices.map((r) => r.ticker).sort(),
       ['FPT', 'VCB']
     );
+    assert.equal(saved.reservation.lockedRank, undefined);
+    assert.equal(saved.reservation.budget, undefined);
+    assert.equal(saved.reservation.allowedPools, undefined);
   });
 });
 

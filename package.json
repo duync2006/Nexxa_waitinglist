@@ -5,16 +5,20 @@
   "type": "module",
   "scripts": {
     "dev": "concurrently -k -n api,web -c blue,green \"npm:dev:server\" \"npm:dev:web\"",
+    "dev:demo": "cross-env MONGODB_DB=nexxa_waitlist_demo npm run dev",
     "dev:web": "vite",
     "dev:server": "node --watch --env-file-if-exists=.env server/index.js",
     "build": "vite build",
     "start": "cross-env NODE_ENV=production node --env-file-if-exists=.env server/index.js",
     "test": "node --env-file=.env.test --test --test-concurrency=1 \"server/tests/**/*.test.js\"",
     "migrate": "node --env-file-if-exists=.env server/scripts/migrate-json-to-mongo.js",
+    "finalize": "node --env-file-if-exists=.env server/scripts/finalize-top.js",
+    "close-repick": "node --env-file-if-exists=.env server/scripts/close-repick.js",
     "backfill": "node --env-file-if-exists=.env server/scripts/backfill-referrals.js",
     "prices": "node --env-file-if-exists=.env server/scripts/update-prices.js",
     "prices:names": "node --env-file-if-exists=.env server/scripts/updateFriendlyName.js",
-    "prices:demo": "cross-env PRICE_SOURCE=demo node --env-file=.env.test server/scripts/update-prices.js"
+    "prices:demo": "cross-env PRICE_SOURCE=demo node --env-file=.env.test server/scripts/update-prices.js",
+    "seed:demo": "cross-env MONGODB_DB=nexxa_waitlist_demo node --env-file-if-exists=.env server/scripts/seed-demo.js"
   },
   "dependencies": {
     "express": "^4.21.2",

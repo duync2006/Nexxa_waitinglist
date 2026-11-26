@@ -1,7 +1,10 @@
 import { useEffect, useState } from 'react';
 import { api } from '../lib/api.js';
-import { fmt } from '../lib/format.js';
+import { fmt, vnd } from '../lib/format.js';
+import { useCountdown, countdownText } from '../lib/useCountdown.js';
+import { raceOver } from '../lib/phase.js';
 import NexxaBot from './NexxaBot.jsx';
+import { FIRST_BUDGET, TOP_BUDGET, REST_BUDGET } from '../../shared/catalog.js';
 
 // Mỗi lượt mời = 10 điểm. Hạng xếp theo điểm ở server (bằng điểm thì ai vào trước đứng trên).
 const POINTS_PER_INVITE = 10;
@@ -20,7 +23,7 @@ const TILES = [
 ];
 
 const WAYS = [
-  { title: 'Mời bạn bè', body: 'Mỗi người hoàn tất đăng ký', value: '+10 điểm',
+  { title: 'Mời bạn bè', body: 'Mỗi người hoàn tất đăng ký', value: '+10 điểm', points: true,
     icon: <><circle cx="9" cy="8" r="4" /><path d="M2 21c0-4 3-6 7-6s7 2 7 6" /><path d="M19 8v6M16 11h6" /></> },
   { title: 'Mua 1, tặng 1 mỗi tháng', body: 'Mua 1 cổ phiếu bất kỳ trong tháng, nhận thêm 1 cổ phiếu', value: '+1 CP',
     icon: <><path d="M17 2l4 4-4 4" /><path d="M3 11V9a3 3 0 0 1 3-3h15" /><path d="M7 22l-4-4 4-4" /><path d="M21 13v2a3 3 0 0 1-3 3H3" /></> },
@@ -49,7 +52,8 @@ function Tile({ t, style }) {
 }
 
 export default function RewardsPage({ me, slots, onBack }) {
-  const { firstSlots, firstRemaining, topSlots, topRemaining } = slots;
+  const { firstSlots, firstRemaining, topSlots, topRemaining, topDeadline } = slots;
+  const countdown = useCountdown(topDeadline);
   const [termsOpen, setTermsOpen] = useState(false);
   // Bảng xếp hạng phân trang, mỗi trang 7 người (server quyết định pageSize). Giữ trang cũ
   // trên màn hình trong lúc tải trang mới để bảng không nháy trắng.
@@ -65,12 +69,26 @@ export default function RewardsPage({ me, slots, onBack }) {
       .finally(() => { if (alive) setLoading(false); });
     return () => { alive = false; };
   }, [page]);
+  // Hai bảng: Top (mặc định) và danh sách First. First chỉ tải khi mở tab lần đầu.
+  const [tab, setTab] = useState('top');
+  const [fPage, setFPage] = useState(1);
+  const [fBoard, setFBoard] = useState(null);
+  const [fLoading, setFLoading] = useState(false);
+  useEffect(() => {
+    if (tab !== 'first') return undefined;
+    let alive = true;
+    setFLoading(true);
+    api.firstList(fPage)
+      .then((b) => { if (alive) setFBoard(b); })
+      .catch(() => {})
+      .finally(() => { if (alive) setFLoading(false); });
+    return () => { alive = false; };
+  }, [tab, fPage]);
   const pageSize = board?.pageSize ?? 7;
-  // Bảng xếp hạng chỉ gồm nhóm đua (đăng ký từ #1.001). Người thuộc First 1.000 không có
-  // hạng đua (rank null) nên không có "trang của tôi" để nhảy tới hay ghim.
-  const inRace = !!me && me.rank != null;
-  const myPage = inRace ? Math.ceil(me.rank / pageSize) : null;
-  const meOffPage = inRace && !!board && myPage !== board.page;
+  // Chỉ người đã mời ít nhất 1 bạn mới có hạng Top (nhảy tới trang của mình và ghim dòng).
+  const hasRank = !!me && me.rank != null;
+  const myPage = hasRank ? Math.ceil(me.rank / pageSize) : null;
+  const meOffPage = hasRank && !!board && myPage !== board.page;
   const points = me ? (me.invites || 0) * POINTS_PER_INVITE : 0;
   const cutoff = board?.cutoff ?? null;
   const firstTaken = firstSlots - firstRemaining;
@@ -78,22 +96,67 @@ export default function RewardsPage({ me, slots, onBack }) {
   const isEarly = !!me && !!me.early;
   const isVip = !!me && !!me.vip;
   const isStd = !!me && !isVip;
+  // Cuộc đua Top đã khép (qua TOP_DEADLINE): lượt mời không còn cộng điểm nên không được hứa
+  // "mời để vào Top" nữa. Ưu tiên phase server trả trong profile; trang mở sẵn từ trước deadline
+  // thì đồng hồ đếm ngược chạm 0 cũng tính.
+  const over = raceOver(me?.phase) || Boolean(countdown?.ended);
 
-  // Thẻ trạng thái: bốn biến thể theo người xem (chưa đăng ký / First 1.000 / Top 1.000 / tiêu chuẩn).
-  const status = isEarly
-    ? { eyebrow: `Người đăng ký thứ #${fmt(me.joinIndex)}`, title: 'Bạn đã chắc suất VIP — cổ phiếu 100.000đ',
-        body: `Bạn thuộc ${fmt(firstSlots)} người đăng ký đầu tiên. Mời bạn bè để họ cùng nhận cổ phiếu.`, cta: 'Mời bạn bè' }
-    : isVip
-      ? { eyebrow: `Hạng #${fmt(me.rank)} · ${fmt(points)} điểm`, title: `Bạn đang trong Top ${fmt(topSlots)} — cổ phiếu VIP 100.000đ`,
-          body: 'Mời thêm bạn bè để giữ vững vị trí.', cta: 'Mời thêm bạn bè' }
-      : isStd
-        ? { eyebrow: `Hạng #${fmt(me.rank)} · ${fmt(points)} điểm`, title: 'Bạn đang ở hạng Tiêu chuẩn — cổ phiếu 50.000đ',
-            body: `Mời bạn bè để leo lên Top ${fmt(topSlots)} và nhận cổ phiếu VIP.`, cta: 'Mời bạn bè' }
-        : firstRemaining > 0
-          ? { eyebrow: 'Suất VIP đang mở', title: `Còn ${fmt(firstRemaining)} suất First ${fmt(firstSlots)} — đăng ký để chắc VIP`,
-              body: 'Hoàn tất đăng ký và eKYC để nhận cổ phiếu trị giá đến 100.000đ.', cta: 'Đăng ký ngay' }
-          : { eyebrow: 'Suất VIP đang mở', title: `Đã hết suất First ${fmt(firstSlots)} — vào Top ${fmt(topSlots)} để nhận VIP`,
-              body: 'Đăng ký rồi mời bạn bè để tích điểm, 1.000 người điểm cao nhất nhận cổ phiếu VIP.', cta: 'Đăng ký ngay' };
+  // Thanh điểm so với ngưỡng Top. Phải theo me.inTop chứ không so points với cutoff: bằng điểm
+  // người hạng 1.000 mà đăng ký sau thì vẫn ở ngoài, và ngưỡng 0 thì ai cũng "đạt" về con số.
+  // Người ngoài Top cần VƯỢT ngưỡng, tức là cutoff + 10 điểm (một lượt mời).
+  let pointsBar = null;
+  if (me && !hasRank && !over) {
+    // Chưa mời ai: chưa có mặt trên bảng Top. Một lượt mời là có hạng; còn suất thì vào Top luôn.
+    const target = cutoff === null ? POINTS_PER_INVITE : cutoff + POINTS_PER_INVITE;
+    pointsBar = {
+      pct: 0,
+      left: `0 / ${fmt(target)} điểm`,
+      right: target === POINTS_PER_INVITE ? 'Mời 1 bạn để vào Top' : `Thiếu ${fmt(target)} điểm để vào Top`
+    };
+  } else if (hasRank && cutoff !== null) {
+    if (me.inTop) {
+      pointsBar = {
+        pct: 100,
+        left: `${fmt(points)} / ${fmt(cutoff)} điểm`,
+        right: points > cutoff ? `Hơn ngưỡng ${fmt(points - cutoff)} điểm` : 'Đang ở đúng ngưỡng'
+      };
+    } else if (!over) {
+      const target = cutoff + POINTS_PER_INVITE;
+      const gap = target - points;
+      pointsBar = {
+        pct: Math.min(100, (points / target) * 100),
+        left: `${fmt(points)} / ${fmt(target)} điểm`,
+        right: cutoff === 0 || gap === POINTS_PER_INVITE ? 'Mời 1 bạn để vào Top' : `Thiếu ${fmt(gap)} điểm để vào Top`
+      };
+    }
+  }
+
+  const rankLine = me ? (hasRank ? `Hạng #${fmt(me.rank)} · ${fmt(points)} điểm` : `Chưa có hạng Top · ${fmt(points)} điểm`) : '';
+  // Thẻ trạng thái: các biến thể theo người xem (chưa đăng ký / First + Top / First / Top / tiêu chuẩn).
+  // Ngân sách lấy từ me.budget, server đã cộng dồn.
+  const status = isEarly && me.inTop
+    ? { eyebrow: `Người đăng ký thứ #${fmt(me.joinIndex)} · ${rankLine}`, title: `Bạn có cả First và Top · ${vnd(me.budget)}`,
+        body: over ? 'Hai suất VIP cộng dồn. Mời bạn bè cùng nhận cổ phiếu.' : 'Hai suất VIP cộng dồn. Mời bạn bè để giữ vững vị trí và để họ cùng nhận cổ phiếu.', cta: 'Mời bạn bè' }
+    : isEarly
+      ? { eyebrow: `Người đăng ký thứ #${fmt(me.joinIndex)} · ${rankLine}`, title: `Bạn đã chắc suất VIP — cổ phiếu ${vnd(me.budget)}`,
+          body: over
+            ? `Bạn thuộc ${fmt(firstSlots)} người đăng ký đầu tiên. Mời bạn bè cùng nhận cổ phiếu.`
+            : `Bạn thuộc ${fmt(firstSlots)} người đăng ký đầu tiên. Mời bạn bè để vào thêm Top ${fmt(topSlots)} và cộng dồn suất.`, cta: 'Mời bạn bè' }
+      : isVip
+        ? { eyebrow: rankLine, title: `Bạn đang trong Top ${fmt(topSlots)} — cổ phiếu VIP ${vnd(me.budget)}`,
+            body: over ? 'Cuộc đua Top đã kết thúc. Mời bạn bè cùng nhận cổ phiếu.' : 'Mời thêm bạn bè để giữ vững vị trí.', cta: 'Mời thêm bạn bè' }
+        : isStd
+          ? { eyebrow: rankLine, title: `Bạn đang ở hạng Tiêu chuẩn — cổ phiếu ${vnd(me.budget)}`,
+              body: over ? 'Cuộc đua Top đã kết thúc. Mời bạn bè cùng nhận cổ phiếu.' : `Mời bạn bè để leo lên Top ${fmt(topSlots)} và nhận cổ phiếu VIP.`, cta: 'Mời bạn bè' }
+          : firstRemaining > 0
+            ? { eyebrow: 'Suất VIP đang mở', title: `Còn ${fmt(firstRemaining)} suất First ${fmt(firstSlots)} — đăng ký để chắc VIP`,
+                // Sau deadline người đăng ký mới không vào được Top nữa: tối đa chỉ còn suất First.
+                body: `Hoàn tất đăng ký và eKYC để nhận cổ phiếu trị giá đến ${vnd(over ? FIRST_BUDGET : FIRST_BUDGET + TOP_BUDGET)}.`, cta: 'Đăng ký ngay' }
+            : over
+              ? { eyebrow: `Top ${fmt(topSlots)} đã chốt`, title: `Đã hết suất First ${fmt(firstSlots)} và Top ${fmt(topSlots)}`,
+                  body: `Đăng ký để nhận cổ phiếu tiêu chuẩn trị giá ${vnd(REST_BUDGET)}.`, cta: 'Đăng ký ngay' }
+              : { eyebrow: 'Suất VIP đang mở', title: `Đã hết suất First ${fmt(firstSlots)} — vào Top ${fmt(topSlots)} để nhận VIP`,
+                  body: 'Đăng ký rồi mời bạn bè để tích điểm, 1.000 người điểm cao nhất nhận cổ phiếu VIP.', cta: 'Đăng ký ngay' };
 
   return (
     <div className="rw">
@@ -124,12 +187,12 @@ export default function RewardsPage({ me, slots, onBack }) {
             <span>{status.eyebrow}</span>
           </div>
           <p className="rw-status-title">{status.title}</p>
-          {inRace && cutoff !== null && (
+          {pointsBar && (
             <div className="rw-bar-wrap">
-              <div className="rw-bar"><div style={{ width: `${cutoff ? Math.min(100, (points / cutoff) * 100) : 100}%` }} /></div>
+              <div className="rw-bar"><div style={{ width: `${pointsBar.pct}%` }} /></div>
               <div className="rw-bar-meta">
-                <span>{fmt(points)} / {fmt(cutoff)} điểm</span>
-                <span>{points >= cutoff ? `Hơn ngưỡng ${fmt(points - cutoff)} điểm` : `Thiếu ${fmt(cutoff - points)} điểm`}</span>
+                <span>{pointsBar.left}</span>
+                <span>{pointsBar.right}</span>
               </div>
             </div>
           )}
@@ -152,7 +215,7 @@ export default function RewardsPage({ me, slots, onBack }) {
             {/* Một bậc VIP, hai đường vào — mỗi đường một dòng số suất riêng. */}
             <div className={`rw-tier${isVip ? ' is-me-vip' : ''}`}>
               <span className="rw-badge rw-badge-vip">VIP</span>
-              <span className="rw-tier-amt">100.000đ</span>
+              <span className="rw-tier-amt">{vnd(FIRST_BUDGET)}</span>
               <div className="rw-tier-route">
                 <span className="rw-tier-note">First {fmt(firstSlots)} · đăng ký sớm</span>
                 <span className="rw-tier-left">Còn {fmt(firstRemaining)} / {fmt(firstSlots)}</span>
@@ -161,10 +224,11 @@ export default function RewardsPage({ me, slots, onBack }) {
                 <span className="rw-tier-note">Top {fmt(topSlots)} · theo điểm mời</span>
                 <span className="rw-tier-left">Còn {fmt(topRemaining)} / {fmt(topSlots)}</span>
               </div>
+              <span className="rw-tier-note">Có cả First và Top: cộng dồn {vnd(FIRST_BUDGET + TOP_BUDGET)}</span>
             </div>
             <div className={`rw-tier${isStd ? ' is-me-std' : ''}`}>
               <span className="rw-badge rw-badge-std">TIÊU CHUẨN</span>
-              <span className="rw-tier-amt">50.000đ</span>
+              <span className="rw-tier-amt">{vnd(REST_BUDGET)}</span>
               <span className="rw-tier-note">Ngoài First {fmt(firstSlots)} và Top {fmt(topSlots)} · cổ phiếu tiêu chuẩn</span>
             </div>
           </div>
@@ -173,7 +237,8 @@ export default function RewardsPage({ me, slots, onBack }) {
         <section className="rw-sec">
           <h2 className="rw-h2">Cách nhận thêm</h2>
           <ul className="rw-ways">
-            {WAYS.map((w) => (
+            {/* Sau deadline lượt mời không còn cộng điểm: bỏ hẳn mục "+10 điểm". */}
+            {WAYS.filter((w) => !(over && w.points)).map((w) => (
               <li key={w.title} className="rw-way">
                 <span className="rw-way-ico">
                   <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{w.icon}</svg>
@@ -189,47 +254,80 @@ export default function RewardsPage({ me, slots, onBack }) {
         </section>
 
         <section className="rw-sec">
-          <h2 className="rw-h2">Bảng xếp hạng Top {fmt(topSlots)}</h2>
-          <span className="rw-board-note">
-            {isEarly
-              ? `Bạn đã chắc suất VIP nên không cần đua. Bảng chỉ xếp người đăng ký từ #${fmt(firstSlots + 1)}.`
-              : `Chỉ xếp người đăng ký từ #${fmt(firstSlots + 1)}. ${fmt(firstSlots)} người đầu tiên đã chắc suất VIP.`}
-          </span>
-          {board && board.top.length > 0 ? (
-            <ul className={`rw-board${loading ? ' is-loading' : ''}`} aria-busy={loading}>
-              {board.top.map((r) => {
-                const mine = me && r.rank === me.rank;
-                return (
-                  <li key={r.rank} className={`rw-board-row${mine ? ' is-me' : ''}`}>
-                    <span className="rw-board-rank">#{fmt(r.rank)}</span>
-                    <span className="rw-board-name">{mine ? 'Bạn' : r.masked}</span>
-                    <span className="rw-board-pts">{fmt(r.points)}</span>
-                  </li>
-                );
-              })}
-              {/* Hạng của mình không nằm trong trang đang xem thì ghim ở cuối. */}
-              {meOffPage && (
-                <li className="rw-board-row is-me">
-                  <span className="rw-board-rank">#{fmt(me.rank)}</span>
-                  <span className="rw-board-name">Bạn</span>
-                  <span className="rw-board-pts">{fmt(points)}</span>
-                </li>
+          <div className="rw-tabs" role="tablist">
+            <button type="button" role="tab" aria-selected={tab === 'top'} className={`rw-tab${tab === 'top' ? ' is-on' : ''}`} onClick={() => setTab('top')}>Top {fmt(topSlots)} · Bảng xếp hạng</button>
+            <button type="button" role="tab" aria-selected={tab === 'first'} className={`rw-tab${tab === 'first' ? ' is-on' : ''}`} onClick={() => setTab('first')}>First {fmt(firstSlots)} · Danh sách</button>
+          </div>
+          {tab === 'top' ? (
+            <>
+              {countdown && <span className="rw-board-note">{countdown.ended ? 'Bảng Top đã chốt' : `Chốt bảng Top: ${countdownText(countdown)}`}</span>}
+              {board && board.top.length > 0 ? (
+                <ul className={`rw-board${loading ? ' is-loading' : ''}`} aria-busy={loading}>
+                  {board.top.map((r) => {
+                    const mine = me && r.rank === me.rank;
+                    return (
+                      <li key={r.rank} className={`rw-board-row${mine ? ' is-me' : ''}`}>
+                        <span className="rw-board-rank">#{fmt(r.rank)}</span>
+                        <span className="rw-board-name">{mine ? 'Bạn' : r.masked}{r.first && <span className="rw-first-tag">First</span>}</span>
+                        <span className="rw-board-pts">{fmt(r.points)}</span>
+                      </li>
+                    );
+                  })}
+                  {/* Hạng của mình không nằm trong trang đang xem thì ghim ở cuối. */}
+                  {meOffPage && (
+                    <li className="rw-board-row is-me">
+                      <span className="rw-board-rank">#{fmt(me.rank)}</span>
+                      <span className="rw-board-name">Bạn{isEarly && <span className="rw-first-tag">First</span>}</span>
+                      <span className="rw-board-pts">{fmt(points)}</span>
+                    </li>
+                  )}
+                </ul>
+              ) : (
+                <p className="rw-way-b">{board ? 'Chưa có ai trên bảng xếp hạng.' : 'Đang tải…'}</p>
               )}
-            </ul>
+              {board && board.totalPages > 1 && (
+                <div className="rw-pager">
+                  <button type="button" className="rw-pager-btn" disabled={page <= 1 || loading} onClick={() => setPage((p) => p - 1)} aria-label="Trang trước">‹</button>
+                  <span className="rw-pager-info">Trang {fmt(board.page)} / {fmt(board.totalPages)}</span>
+                  <button type="button" className="rw-pager-btn" disabled={page >= board.totalPages || loading} onClick={() => setPage((p) => p + 1)} aria-label="Trang sau">›</button>
+                  {hasRank && myPage !== page && (
+                    <button type="button" className="rw-pager-me" onClick={() => setPage(myPage)}>Xem hạng của tôi</button>
+                  )}
+                </div>
+              )}
+              {cutoff !== null && (
+                <span className="rw-board-note">
+                  {over ? `Ngưỡng Top ${fmt(topSlots)} lúc chốt: ${fmt(cutoff)} điểm` : `Ngưỡng vào Top ${fmt(topSlots)} hiện tại: ${fmt(cutoff)} điểm`}
+                </span>
+              )}
+            </>
           ) : (
-            <p className="rw-way-b">{board ? 'Chưa có ai trên bảng xếp hạng.' : 'Đang tải…'}</p>
-          )}
-          {board && board.totalPages > 1 && (
-            <div className="rw-pager">
-              <button type="button" className="rw-pager-btn" disabled={page <= 1 || loading} onClick={() => setPage((p) => p - 1)} aria-label="Trang trước">‹</button>
-              <span className="rw-pager-info">Trang {fmt(board.page)} / {fmt(board.totalPages)}</span>
-              <button type="button" className="rw-pager-btn" disabled={page >= board.totalPages || loading} onClick={() => setPage((p) => p + 1)} aria-label="Trang sau">›</button>
-              {inRace && myPage !== page && (
-                <button type="button" className="rw-pager-me" onClick={() => setPage(myPage)}>Xem hạng của tôi</button>
+            <>
+              <span className="rw-board-note">Còn {fmt(fBoard?.firstRemaining ?? firstRemaining)} / {fmt(firstSlots)} suất</span>
+              {fBoard && fBoard.rows.length > 0 ? (
+                <ul className={`rw-board${fLoading ? ' is-loading' : ''}`} aria-busy={fLoading}>
+                  {fBoard.rows.map((r) => {
+                    const mine = me && r.joinIndex === me.joinIndex;
+                    return (
+                      <li key={r.joinIndex} className={`rw-board-row${mine ? ' is-me' : ''}`}>
+                        <span className="rw-board-rank">#{fmt(r.joinIndex)}</span>
+                        <span className="rw-board-name">{mine ? 'Bạn' : r.masked}</span>
+                      </li>
+                    );
+                  })}
+                </ul>
+              ) : (
+                <p className="rw-way-b">{fBoard ? 'Chưa có ai trong danh sách First.' : 'Đang tải…'}</p>
               )}
-            </div>
+              {fBoard && fBoard.totalPages > 1 && (
+                <div className="rw-pager">
+                  <button type="button" className="rw-pager-btn" disabled={fPage <= 1 || fLoading} onClick={() => setFPage((p) => p - 1)} aria-label="Trang trước">‹</button>
+                  <span className="rw-pager-info">Trang {fmt(fBoard.page)} / {fmt(fBoard.totalPages)}</span>
+                  <button type="button" className="rw-pager-btn" disabled={fPage >= fBoard.totalPages || fLoading} onClick={() => setFPage((p) => p + 1)} aria-label="Trang sau">›</button>
+                </div>
+              )}
+            </>
           )}
-          {cutoff !== null && <span className="rw-board-note">Ngưỡng vào Top {fmt(topSlots)} hiện tại: {fmt(cutoff)} điểm</span>}
         </section>
 
         <section id="rw-terms" className="rw-acc">

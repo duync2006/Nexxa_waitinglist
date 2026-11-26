@@ -3,15 +3,17 @@ import * as otpService from '../services/otp.service.js';
 import * as waitlist from '../services/waitlist.service.js';
 import { sendOtpEmail } from '../services/mailer.service.js';
 import { normalizeEmail, requireEmail } from '../utils/email.js';
-import { badGateway, conflict } from '../utils/app-error.js';
+import { createSession, destroySession } from '../services/session.service.js';
+import { bearerToken } from '../middlewares/session.middleware.js';
+import { badGateway } from '../utils/app-error.js';
 
-// Kiểm tra một email đã tham gia waitlist chưa. Frontend gọi trước khi gửi OTP;
-// email đã có thì hiện luôn kết quả hiện tại thay vì bắt xác thực lại.
+// Kiểm tra một email đã tham gia waitlist chưa. Chỉ trả `exists`, không lộ profile:
+// muốn xem profile phải xác thực OTP rồi dùng token phiên (/me).
 export async function check(req, res) {
   const email = requireEmail(req.body?.email);
   const user = await waitlist.findByEmail(email);
   if (!user) return res.json({ exists: false });
-  res.json({ exists: true, profile: await waitlist.toProfile(user) });
+  res.json({ exists: true });
 }
 
 // Bước 1: nhập email → gửi OTP
@@ -30,7 +32,8 @@ export async function requestOtp(req, res) {
   res.json({ ok: true, ...(env.isProd ? {} : { devOtp: code }) });
 }
 
-// Bước 2: xác thực OTP → tạo chỗ trong waitlist, trả về hạng
+// Bước 2: xác thực OTP → tạo chỗ trong waitlist, trả về profile kèm token phiên.
+// Email đã đăng ký vẫn được 200 (alreadyRegistered) và nhận token mới.
 export async function verify(req, res) {
   // Cố ý KHÔNG kiểm định dạng email ở đây: email sai thì không có bản ghi OTP nào khớp,
   // và người dùng nhận đúng thông báo "Mã đã hết hạn" như bản cũ.
@@ -39,8 +42,15 @@ export async function verify(req, res) {
 
   const { user, created } = await waitlist.join(email, ref);
   const profile = await waitlist.toProfile(user);
-  if (!created) {
-    throw conflict('Email này đã tham gia waitlist.', { alreadyRegistered: true, profile });
-  }
-  res.json(profile);
+  const token = await createSession(user._id);
+  res.json(created ? { profile, token } : { profile, token, alreadyRegistered: true });
+}
+
+export async function me(req, res) {
+  res.json(await waitlist.toProfile(req.user));
+}
+
+export async function logout(req, res) {
+  await destroySession(bearerToken(req));
+  res.json({ ok: true });
 }

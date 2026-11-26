@@ -1,6 +1,6 @@
 // Lỗi có mã HTTP kèm sẵn. Service ném ra, error.middleware.js dịch thành JSON.
 // `extra` giữ các field đặc biệt mà frontend đang đọc: retryAfter (429),
-// alreadyRegistered + profile (409) — xem src/lib/api.js và SignupCard.jsx.
+// alreadyRegistered (không còn dùng cho verify) — xem src/lib/api.js và SignupCard.jsx.
 export class AppError extends Error {
   constructor(status, message, extra = {}) {
     super(message);
@@ -16,3 +16,5 @@ export const conflict = (message, extra) => new AppError(409, message, extra);
 export const tooMany = (message, extra) => new AppError(429, message, extra);
 export const badGateway = (message, extra) => new AppError(502, message, extra);
 export const unavailable = (message, extra) => new AppError(503, message, extra);
+export const unauthorized = (message, extra) => new AppError(401, message, extra);
+export const locked = (message, extra) => new AppError(423, message, extra);

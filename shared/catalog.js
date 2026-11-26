@@ -2,12 +2,11 @@
 // Trước đây server import thẳng src/lib/data.js (phụ thuộc ngược vào source frontend) và
 // TOTAL_SLOTS được khai báo hai nơi độc lập — sửa một nơi là lệch. Giờ cả hai cùng đọc từ đây.
 
-// Hai đường vào VIP, mỗi đường 1.000 suất, KHÔNG chồng lên nhau:
-//   1. FIRST_SLOTS — 1.000 người đăng ký đầu tiên (joinIndex 1..1.000), chắc chắn VIP bất kể điểm.
-//   2. TOTAL_SLOTS — Top 1.000 theo điểm, xếp RIÊNG trong nhóm đăng ký từ người #1.001 trở đi
-//      ("nhóm đua"). Người thuộc First 1.000 không chiếm chỗ trong cuộc đua này.
-// Tổng cộng tối đa 2.000 suất VIP. Tên TOTAL_SLOTS giữ nguyên vì /api/catalog và /api/stats
-// đã trả về key `totalSlots` — đổi tên là vỡ client cũ.
+// Hai đường vào VIP chạy SONG SONG, mỗi đường 1.000 suất, và CÓ THỂ chồng lên nhau:
+//   1. FIRST_SLOTS — 1.000 người đăng ký đầu tiên (joinIndex 1..1.000), chắc chắn bất kể điểm.
+//   2. TOTAL_SLOTS — Top 1.000 theo điểm, chỉ xét người đã mời ít nhất 1 bạn (kể cả người First).
+// Thuộc cả hai thì quyền lợi cộng dồn (xem entitlementOf). Tên TOTAL_SLOTS giữ nguyên vì
+// /api/catalog và /api/stats đã trả về key `totalSlots` — đổi tên là vỡ client cũ.
 export const FIRST_SLOTS = 1000;
 export const TOTAL_SLOTS = 1000;
 // Số suất nhóm Standard. Chỉ dùng để hiển thị; server chưa chặn đăng ký khi vượt quá.
@@ -15,6 +14,9 @@ export const STANDARD_SLOTS = 9000;
 
 // Người đăng ký sớm: joinIndex tăng đều 1 theo thứ tự đăng ký (bộ đếm Counter 'users').
 export const isEarlyJoin = (joinIndex) => joinIndex <= FIRST_SLOTS;
+
+// Hạng Top (trong nhóm đã mời ít nhất 1 bạn) nằm trong 1..TOTAL_SLOTS. rank null = chưa mời ai.
+export const isTopRank = (rank) => rank != null && rank <= TOTAL_SLOTS;
 
 const S = (s) => s.split(';').map((p) => { const [t, n] = p.split('|'); return { t, n }; });
 
@@ -55,14 +57,29 @@ export const NAME_OF_TICKER = Object.fromEntries(
   Object.values(RESERVABLE).flat().map((s) => [s.t, s.n])
 );
 
-// Quyền chọn cổ phiếu. First 1.000 và Top 1.000 cùng hưởng bậc 'top' — quyền lợi giống
-// nhau, chỉ khác đường vào; còn lại là 'rest'.
+// Ngân sách từng suất. Thuộc cả First lẫn Top thì cộng dồn: FIRST_BUDGET + TOP_BUDGET,
+// chọn chung một giỏ. Không thuộc suất nào thì REST_BUDGET và chỉ được nhóm Standard.
+export const FIRST_BUDGET = 100000;
+export const TOP_BUDGET = 100000;
+export const REST_BUDGET = 50000;
+
+// Hai bậc hiển thị cho /api/catalog và style ở frontend. Ngân sách của bậc 'top' là mức
+// MỘT suất; người có cả hai suất được nhiều hơn — con số thật luôn lấy từ entitlementOf.
 export const ENTITLEMENTS = [
-  { key: 'top', label: 'VIP', budget: 100000, pools: ['vip', 'standard'] },
-  { key: 'rest', label: 'Tiêu chuẩn', budget: 50000, pools: ['standard'] }
+  { key: 'top', label: 'VIP', budget: FIRST_BUDGET, pools: ['vip', 'standard'] },
+  { key: 'rest', label: 'Tiêu chuẩn', budget: REST_BUDGET, pools: ['standard'] }
 ];
 
-// early: thuộc First 1.000. rank: hạng trong nhóm đua (null với người đăng ký sớm).
-export const isVip = ({ early, rank }) => Boolean(early) || (rank != null && rank <= TOTAL_SLOTS);
+// early: thuộc First 1.000. inTop: đang (hoặc đã chốt) ở hạng 1..TOTAL_SLOTS của Top.
+export const isVip = ({ early, inTop }) => Boolean(early) || Boolean(inTop);
 
-export const entitlementOf = (standing) => (isVip(standing) ? ENTITLEMENTS[0] : ENTITLEMENTS[1]);
+export const entitlementOf = ({ early, inTop }) => {
+  const [top, rest] = ENTITLEMENTS;
+  if (!isVip({ early, inTop })) return { key: rest.key, label: rest.label, budget: REST_BUDGET, pools: [...rest.pools] };
+  return {
+    key: top.key,
+    label: top.label,
+    budget: (early ? FIRST_BUDGET : 0) + (inTop ? TOP_BUDGET : 0),
+    pools: [...top.pools]
+  };
+};

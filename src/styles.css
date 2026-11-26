@@ -231,6 +231,7 @@ button:disabled { opacity: 0.6; cursor: not-allowed; }
 /* Tag phân loại ở góc trên bên phải chip đã chọn. Chỉ mã VIP có tag; không tag nghĩa là Standard.
    Màu lấy theo hạng GOLD (pool VIP = rổ VN30) để khớp với tier pill ở màn hình kết quả. */
 .chip-tag { position: absolute; top: -10px; right: -6px; padding: 1px 6px; border: 1px solid #E3B33D; border-radius: 999px; background: #FFF3D1; color: #7A5600; font-size: 10px; font-weight: 800; letter-spacing: 0.04em; line-height: 1.5; pointer-events: none; }
+.chip.picked.chip-err { border-color: var(--error); box-shadow: 0 0 0 2px rgba(185, 28, 28, 0.25); }
 .chip-x { border: 0; background: none; color: var(--ink); font-size: 16px; line-height: 1; padding: 0 0 0 2px; cursor: pointer; }
 /* flex-shrink: 0 là bắt buộc: min-height đã ghi đè min-height:auto của flex item, nên nếu không
    khoá lại thì .modal (flex column có max-height) sẽ bóp ô này còn 96px và chip tràn ra ngoài khung. */
@@ -425,6 +426,9 @@ button:disabled { opacity: 0.6; cursor: not-allowed; }
 /* Nhắc lại giỏ cổ phiếu đã chọn, ngay trên ô email. Nền nhạt màu nhấn để nó đọc như một
    việc đang dở chứ không phải một dòng chú thích. */
 .basket-note { padding: 10px 14px; border-radius: 12px; background: var(--good-bg); border: 1px solid var(--line); font-size: 14px; line-height: 1.5; color: var(--muted); }
+/* Thông báo theo giai đoạn campaign (đang chốt / phải chọn lại / hết hạn). Màu hổ phách của
+   token --tag-* để khác hẳn lỗi đỏ: đây là việc cần làm, không phải thao tác vừa hỏng. */
+.phase-note { flex-shrink: 0; margin: 0; padding: 10px 14px; border-radius: 12px; background: var(--tag-bg); border: 1px solid var(--tag-line); font-size: 14px; font-weight: 600; line-height: 1.5; color: var(--tag-ink); }
 
 /* Khối khan hiếm ở hero. Bề rộng bám theo .lead ngay trên nó để hai dòng thành một cụm:
    giá trị rồi tới số suất còn lại, đọc liền một mạch. */
@@ -449,6 +453,8 @@ button:disabled { opacity: 0.6; cursor: not-allowed; }
 .ring-value { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; font-variant-numeric: tabular-nums; line-height: 1; }
 .ring-value b { font-size: 13; font-weight: 800; letter-spacing: -0.02em; color: var(--ink); padding-bottom: 2px; }
 .ring-value span { font-size: 10px; font-weight: 500; color: var(--muted); }
+/* Số suất còn lại cùng cỡ với nhãn bên ngoài vòng (.ring-label), không to như trước */
+.ring-value .ring-remain { font-size: 15px; font-weight: 700; letter-spacing: 0; }
 .ring figcaption { display: flex; flex-direction: column; align-items: center; gap: 1px; text-align: center; }
 .ring-label { display: flex; align-items: center; gap: 5px; font-size: 13px; font-weight: 700; color: var(--ink); }
 /* Chấm màu trước nhãn để nhãn khớp với màu cung phía trên */
@@ -773,3 +779,16 @@ button:disabled { opacity: 0.6; cursor: not-allowed; }
   .promo-bot, .promo-shadow { animation: none; }
   .promo:hover { transform: none; }
 }
+
+/* Hai tab bảng Top / First, huy hiệu First trên bảng Top, chữ giữa vòng Top khi hết suất */
+.rw-tabs { display: flex; gap: 6px; }
+.rw-tab { flex: 1; min-height: 40px; padding: 0 8px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); color: var(--muted); font-size: 13px; font-weight: 600; cursor: pointer; }
+.rw-tab.is-on { background: var(--tag-bg); color: var(--tag-ink); border-color: transparent; }
+.rw-first-tag { margin-left: 8px; padding: 1px 8px; border-radius: 999px; background: var(--tag-bg); color: var(--tag-ink); font-size: 11px; font-weight: 700; vertical-align: middle; }
+/* Chữ giữa vòng Top. Vòng trong (r=44/120) rộng ~59px ở dial 80px, ~70px ở dial 96px; mép trong
+   cung ngoài (r=50) rộng ~67px / ~80px. Cỡ 10–12px: "Mời 1 bạn" (9 ký tự đậm, ~0,5em/ký tự) chỉ
+   ~45–54px nên nằm gọn trong vòng trong kể cả khi lệch lên trên tâm vì có ba dòng. max-width 78%
+   dial (~62px / ~75px): ngưỡng dài như "≥ 1.230 điểm" tự xuống dòng ở khoảng trắng chứ không tràn
+   qua cung ngoài. */
+.ring-value .ring-center-main { max-width: 78%; font-size: clamp(10px, 2.8vw, 12px); text-align: center; line-height: 1.1; overflow-wrap: anywhere; }
+.ring-value .ring-center-note { max-width: 78%; text-align: center; line-height: 1.1; }

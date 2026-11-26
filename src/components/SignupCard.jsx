@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { api } from '../lib/api.js';
 import { useCatalog } from '../lib/catalog.jsx';
 import { fmt, vnd } from '../lib/format.js';
+import { raceOver, repickNotice } from '../lib/phase.js';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -9,7 +10,7 @@ function readRef() {
   try { return new URLSearchParams(window.location.search).get('ref') || null; } catch { return null; }
 }
 
-export default function SignupCard({ me, onJoined, onReset, onOpenReserve, pendingBasket = [] }) {
+export default function SignupCard({ me, onJoined, onReset, onOpenReserve, pendingBasket = [], notice = '' }) {
   const [ref] = useState(readRef);
   // Vào bằng link mời thì luôn mở form đăng ký, kể cả khi trình duyệt còn profile cũ —
   // link mời là để người mới đăng ký, không phải để xem lại kết quả của người đang ngồi máy.
@@ -25,13 +26,17 @@ export default function SignupCard({ me, onJoined, onReset, onOpenReserve, pendi
   // Mất me (bấm "Dùng email khác") thì quay lại form nhập email. Thiếu nhánh này sẽ kẹt ở
   // step 'result' và render ra card rỗng. Chiều ngược lại do submitEmail/submitOtp tự gọi.
   useEffect(() => {
-    if (me) return;
+    // me về muộn (khôi phục phiên sau khi tải lại trang) thì chuyển sang màn kết quả.
+    if (me) {
+      if (!ref) setStep('result');
+      return;
+    }
     setStep('email');
     setEmail('');
     setOtp('');
     setError('');
     setReturning(false);
-  }, [me]);
+  }, [me, ref]);
 
   useEffect(() => {
     if (cooldown <= 0) return undefined;
@@ -54,17 +59,10 @@ export default function SignupCard({ me, onJoined, onReset, onOpenReserve, pendi
     setBusy(true);
     setError('');
     try {
-      // Email đã tham gia waitlist thì hiện luôn kết quả hiện tại, không bắt xác thực lại
+      // Email đã đăng ký thì vẫn phải nhập OTP mới xem được kết quả: check chỉ cho biết có
+      // hay không, không trả profile.
       const found = await api.check(email.trim());
-      if (found.exists) {
-        setReturning(true);
-        // await: onJoined còn ghi nhận giỏ cổ phiếu đã chọn trước khi đăng ký. Không chờ thì
-        // màn kết quả hiện ra trước khi lưu xong, và nút "Nhận" bên modal vẫn thấy giỏ rỗng.
-        await onJoined(found.profile);
-        setStep('result');
-        return;
-      }
-      setReturning(false);
+      setReturning(Boolean(found.exists));
       await sendCode();
       setOtp('');
       setStep('otp');
@@ -86,18 +84,11 @@ export default function SignupCard({ me, onJoined, onReset, onOpenReserve, pendi
     setBusy(true);
     setError('');
     try {
-      const profile = await api.verify(email.trim(), otp);
-      setReturning(false);
+      const { profile, alreadyRegistered } = await api.verify(email.trim(), otp);
+      setReturning(Boolean(alreadyRegistered));
       await onJoined(profile);
       setStep('result');
     } catch (err) {
-      // Email vừa được đăng ký ở nơi khác giữa lúc nhập OTP: server trả 409 kèm kết quả hiện tại
-      if (err.data?.alreadyRegistered && err.data.profile) {
-        setReturning(true);
-        await onJoined(err.data.profile);
-        setStep('result');
-        return;
-      }
       setError(err.message);
     } finally {
       setBusy(false);
@@ -139,7 +130,7 @@ export default function SignupCard({ me, onJoined, onReset, onOpenReserve, pendi
             </button>
           </div>
           <button type="button" className="btn btn-outline" onClick={onOpenReserve}>Xem cổ phiếu được tặng</button>
-          {error && <p role="alert" className="error">{error}</p>}
+          {(error || notice) && <p role="alert" className="error">{error || notice}</p>}
           <p className="muted-sm">
             Chúng tôi sẽ gửi mã xác thực 6 số tới email này.
             {ref && <> Bạn được mời bởi mã <strong>{ref.toUpperCase()}</strong>.</>}
@@ -157,6 +148,7 @@ export default function SignupCard({ me, onJoined, onReset, onOpenReserve, pendi
           <div className="stack-4">
             <h2 className="h2-card">Nhập mã xác thực</h2>
             <p className="muted">Mã 6 số đã được gửi tới <strong className="ink">{email.trim()}</strong></p>
+            {returning && <p className="muted">Email này đã đăng ký — nhập mã để xem kết quả.</p>}
           </div>
           <label htmlFor="wl-otp" className="label">Mã OTP</label>
           <input
@@ -214,8 +206,16 @@ function Result({ me, returning, onReset, onOpenReserve }) {
 
   // Pill nói rõ ĐƯỜNG VÀO, không chỉ bậc: hai nhóm VIP cùng quyền lợi nhưng người đăng ký
   // sớm cần biết mình đã chắc suất, còn người Top cần biết mình đang giữ chỗ bằng điểm.
-  const pillLabel = me.early ? 'First 1.000 · VIP' : me.vip ? 'Top 1.000 · VIP' : myTier.label;
+  const pillLabel = me.early && me.inTop ? 'First + Top · VIP'
+    : me.early ? 'First 1.000 · VIP'
+    : me.inTop ? 'Top 1.000 · VIP'
+    : 'Tiêu chuẩn';
   const tier = { label: pillLabel, fg: myTier.fg, bg: myTier.bg };
+  // Sau TOP_DEADLINE lượt mời không còn cộng điểm: bỏ lời hứa "+10 điểm, leo hạng", link mời
+  // vẫn giữ vì bạn bè đăng ký vẫn nhận được cổ phiếu.
+  const closed = raceOver(me.phase);
+  // Giỏ không còn vừa quyền lợi đã chốt: nhắc ngay ở màn kết quả, không đợi mở modal mới biết.
+  const mustRepick = me.phase === 'repick' && me.needsRepick;
 
   async function copy() {
     try { await navigator.clipboard.writeText(refUrl); } catch { /* bỏ qua */ }
@@ -244,33 +244,53 @@ function Result({ me, returning, onReset, onOpenReserve }) {
       </div>
 
       <div className="rank-row">
-        {/* Người đăng ký sớm không có hạng đua: hiện thứ tự đăng ký thay vì hạng. */}
+        {/* Người First hiện cả thứ tự đăng ký lẫn hạng Top. Chỉ người đã mời ít nhất 1 bạn mới
+            có hạng Top (me.rank null khi chưa mời ai). */}
         <div className="stack-2">
-          <span className="muted-14">{me.early ? 'Bạn là người đăng ký thứ' : 'Hạng của bạn trong cuộc đua Top 1.000'}</span>
-          <span className="rank-big">#{fmt(me.early ? me.joinIndex : me.rank)}</span>
+          {me.early ? (
+            <>
+              <span className="muted-14">Bạn là người đăng ký thứ <strong className="ink">#{fmt(me.joinIndex)}</strong></span>
+              <span className="muted-14">
+                {me.rank != null
+                  ? <>Hạng Top 1.000 <strong className="ink">#{fmt(me.rank)}</strong></>
+                  : raceOver(me.phase) ? 'Chưa vào Top 1.000' : 'Mời 1 bạn để vào bảng Top 1.000'}
+              </span>
+            </>
+          ) : me.rank != null ? (
+            <>
+              <span className="muted-14">Hạng của bạn trong cuộc đua Top 1.000</span>
+              <span className="rank-big">#{fmt(me.rank)}</span>
+            </>
+          ) : (
+            <>
+              <span className="muted-14">Cuộc đua Top 1.000</span>
+              <span className="muted-14 ink">{raceOver(me.phase) ? 'Bạn chưa vào Top' : 'Mời 1 bạn để có hạng'}</span>
+            </>
+          )}
         </div>
         <span className="tier-pill" style={{ background: tier.bg, color: tier.fg }}>{tier.label}</span>
       </div>
 
       <div className="gift-box" style={{ background: myTier.bg }}>
         <span className="gift-kicker" style={{ color: myTier.fg }}>Phần quà dự kiến</span>
-        <span className="gift-value">Cổ phiếu trị giá {vnd(myTier.budget)}</span>
+        <span className="gift-value">Cổ phiếu trị giá {vnd(me.budget)}</span>
         <span className="gift-group">{myTier.group}</span>
       </div>
 
 
+      {mustRepick && <p className="phase-note" role="status">{repickNotice(me.repickDeadline)}</p>}
+
       <div className="invite">
-        {/* Người đăng ký sớm đã chắc suất: không còn hạng để leo, chỉ mời bạn cùng nhận. */}
-        <div className="stack-2">
-          {me.early ? (
+        {closed ? (
+          <div className="stack-2">
             <span className="invite-title">Mời bạn bè cùng nhận cổ phiếu</span>
-          ) : (
-            <>
-              <span className="invite-title">Mời bạn bè, leo hạng nhanh hơn</span>
-              <span className="muted-14">Mỗi lượt đăng ký qua link = <strong className="ink">+10 điểm</strong></span>
-            </>
-          )}
-        </div>
+          </div>
+        ) : (
+          <div className="stack-2">
+            <span className="invite-title">Mời bạn bè, leo hạng nhanh hơn</span>
+            <span className="muted-14">Mỗi lượt đăng ký qua link = <strong className="ink">+10 điểm</strong></span>
+          </div>
+        )}
         <div className="row-wrap-8">
           <div className="ref-box" title={refUrl}>{refShown}</div>
           <button

@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "b1f4c8e2-7a3d-4c9e-9f21-3e8d5a7c1b40",
     "name": "Nexxa Waitlist API",
-    "description": "API waitlist Nexxa: email → OTP → xếp hạng → link mời → Reserve cổ phiếu.\n\n## Luật VIP\n\nHai đường vào VIP, không chồng nhau (tối đa 2.000 suất):\n\n1. **First 1.000** — 1.000 người đăng ký đầu tiên (joinIndex ≤ 1.000) chắc chắn VIP, không có hạng đua (`rank = null`).\n2. **Top 1.000** — 1.000 người điểm cao nhất trong nhóm đăng ký từ #1.001 (\"nhóm đua\").\n\nChi tiết: `docs/business-rules.md`.\n\n## Cách dùng nhanh\n\nChạy lần lượt các request trong thư mục **Luồng chính** từ trên xuống. Script test tự lưu `devOtp` và `refCode` vào biến collection nên không phải chép tay:\n\n1. `Gửi OTP` → lưu `otp`\n2. `Xác thực OTP` → lưu `refCode` của chính bạn\n3. `Reserve cổ phiếu` → dùng email vừa đăng ký\n\n## Biến\n\n| Biến | Mặc định | Ghi chú |\n|---|---|---|\n| `baseUrl` | `http://localhost:3001` | Dev. Production: `https://nexxa.asia/waitlist` |\n| `email` | `test@example.com` | Đổi thành email bạn muốn thử |\n| `otp` | (trống) | Tự điền sau khi gọi `Gửi OTP` |\n| `refCode` | (trống) | Tự điền sau khi `Xác thực OTP` thành công |\n| `refCodeNguoiMoi` | (trống) | Điền tay refCode của người mời khi muốn thử luồng giới thiệu |\n\n## Lưu ý\n\n- `devOtp` **chỉ trả về khi `NODE_ENV` không phải production**. Trên production phải lấy mã từ email thật.\n- Request `Link mời ngắn` trả 302. Postman mặc định tự đi theo redirect — tắt **Settings → Automatically follow redirects** để nhìn thấy header `Location`.\n- **Toàn bộ API đều dùng POST**, kể cả các API chỉ đọc như `/api/stats` và `/api/waitlist/check`. Tham số luôn nằm trong body JSON, không dùng query string.\n- Ngoại lệ duy nhất là `/r/:code` — đó là link người dùng bấm trong trình duyệt nên bắt buộc phải là GET.\n- Chưa có rate limit theo IP, nhưng `Gửi OTP` có cooldown 60 giây cho mỗi email.",
+    "description": "API waitlist Nexxa: email → OTP → xếp hạng → link mời → Reserve cổ phiếu.\n\n## Luật nhận cổ phiếu (v2)\n\nHai campaign chạy song song, **có thể chồng nhau**:\n\n1. **First 1.000** — 1.000 người đăng ký đầu tiên (joinIndex ≤ 1.000): chắc suất, 100.000đ.\n2. **Top 1.000** — xếp trên **toàn bộ** người đăng ký (kể cả người First) theo điểm mời; hạng 1..1.000 tại `TOP_DEADLINE` nhận 100.000đ.\n\nThuộc cả hai thì cộng dồn **200.000đ**, chọn chung một giỏ. Không thuộc nhóm nào: 50.000đ, chỉ nhóm Standard. Mọi người đều có `rank` (không còn `null`).\n\nChi tiết: `docs/business-rules.md`.\n\n## Cách dùng nhanh\n\nChạy lần lượt các request trong thư mục **Luồng chính** từ trên xuống. Script test tự lưu `devOtp` và `refCode` vào biến collection nên không phải chép tay:\n\n1. `Gửi OTP` → lưu `otp`\n2. `Xác thực OTP` → lưu `refCode` của chính bạn và `token` phiên (sống 12 giờ)\n3. `Reserve cổ phiếu` → danh tính lấy từ token (header `Authorization: Bearer {{token}}`), không gửi email trong body\n\n## Biến\n\n| Biến | Mặc định | Ghi chú |\n|---|---|---|\n| `baseUrl` | `http://localhost:3001` | Dev. Production: `https://nexxa.asia/waitlist` |\n| `email` | `test@example.com` | Đổi thành email bạn muốn thử |\n| `otp` | (trống) | Tự điền sau khi gọi `Gửi OTP` |\n| `refCode` | (trống) | Tự điền sau khi `Xác thực OTP` thành công |\n| `token` | (trống) | Tự điền sau `Xác thực OTP`. Gửi qua header `Authorization: Bearer {{token}}` cho `/reserve`, `/reserve/options`, `/waitlist/me`, `/waitlist/logout` |\n| `refCodeNguoiMoi` | (trống) | Điền tay refCode của người mời khi muốn thử luồng giới thiệu |\n\n## Lưu ý\n\n- `devOtp` **chỉ trả về khi `NODE_ENV` không phải production**. Trên production phải lấy mã từ email thật.\n- Request `Link mời ngắn` trả 302. Postman mặc định tự đi theo redirect — tắt **Settings → Automatically follow redirects** để nhìn thấy header `Location`.\n- **Toàn bộ API đều dùng POST**, kể cả các API chỉ đọc như `/api/stats` và `/api/waitlist/check`. Tham số luôn nằm trong body JSON, không dùng query string.\n- Ngoại lệ duy nhất là `/r/:code` — đó là link người dùng bấm trong trình duyệt nên bắt buộc phải là GET.\n- Thiếu hoặc sai token → **401**. Giỏ đang khoá (`frozen` hoặc `closed`) → **423**. `/reserve/options` không có token vẫn chạy, trả bản xem thử (`preview: true`).\n- Chưa có rate limit theo IP, nhưng `Gửi OTP` có cooldown 60 giây cho mỗi email.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -35,6 +35,11 @@
       "key": "budget",
       "value": "",
       "type": "string"
+    },
+    {
+      "key": "token",
+      "value": "",
+      "type": "string"
     }
   ],
   "item": [
@@ -62,7 +67,7 @@
                 "stats"
               ]
             },
-            "description": "Số người đã xác thực email và số suất VIP còn lại ở hai đường vào. Không cần xác thực. Body rỗng `{}`.\n\n**200** `{ registered, firstSlots, firstRemaining, totalSlots, topRemaining, remaining, last24h, recent }`\n\n- `firstRemaining` = suất First 1.000 còn lại (1.000 − số người có joinIndex ≤ 1.000).\n- `topRemaining` = suất Top 1.000 còn trống trong nhóm đua (1.000 − số người đăng ký từ #1.001). Về 0 khi nhóm đua đủ 1.000 người, dù thứ hạng vẫn đổi theo điểm.\n- `remaining` = `firstRemaining + topRemaining` (tổng suất VIP còn mở, tối đa 2.000).\n- `last24h` = số người đăng ký trong 24 giờ qua; `recent` = 12 người gần nhất, email đã che.\n\nCác con số không bao giờ âm.",
+            "description": "Số người đã xác thực email và các con số hiển thị ở hero. Không cần xác thực. Body rỗng `{}`.\n\n**200** `{ registered, firstSlots, firstRemaining, totalSlots, topRemaining, remaining, topCutoff, topStart, topDeadline, last24h, recent }`\n\n- `firstRemaining` = suất First 1.000 còn lại (1.000 − số người có joinIndex ≤ 1.000).\n- `topRemaining` = `max(0, 1.000 − registered)`: Top xếp trên toàn bộ người đăng ký nên chừng nào chưa đủ 1.000 người thì ai cũng đang trong Top.\n- `remaining` = `firstRemaining + topRemaining`, giữ để không vỡ client cũ (hai nhóm chồng nhau nên không phải số người còn vào được VIP).\n- `topCutoff` = điểm của người hạng 1.000 (`null` khi chưa đủ 1.000 người). `topStart`, `topDeadline` là ISO 8601 hoặc `null` nếu chưa đặt.\n- `last24h` = số người đăng ký trong 24 giờ qua; `recent` = 12 người gần nhất, email đã che.\n\nCác con số không bao giờ âm.",
             "body": {
               "mode": "raw",
               "raw": "{}",
@@ -81,8 +86,8 @@
                 "exec": [
                   "pm.test('Trả về 200', () => pm.response.to.have.status(200));",
                   "const b = pm.response.json();",
-                  "pm.test('Đủ 8 field', () => {",
-                  "  pm.expect(b).to.have.all.keys('registered', 'firstSlots', 'firstRemaining', 'totalSlots', 'topRemaining', 'remaining', 'last24h', 'recent');",
+                  "pm.test('Đủ 11 field', () => {",
+                  "  pm.expect(b).to.have.all.keys('registered', 'firstSlots', 'firstRemaining', 'totalSlots', 'topRemaining', 'remaining', 'topCutoff', 'topStart', 'topDeadline', 'last24h', 'recent');",
                   "});",
                   "pm.test('Số suất còn lại không âm', () => {",
                   "  pm.expect(b.firstRemaining).to.be.at.least(0);",
@@ -116,7 +121,7 @@
                 "check"
               ]
             },
-            "description": "Frontend gọi trước khi gửi OTP: email đã có thì hiện luôn kết quả hiện tại thay vì bắt xác thực lại.\n\n**200 (chưa đăng ký)** `{ exists: false }`\n\n**200 (đã đăng ký)** `{ exists: true, profile: { email, early, joinIndex, rank, vip, registered, refCode, invites } }`\n\n- `early: true` → thuộc First 1.000 (joinIndex ≤ 1.000), chắc VIP, `rank = null`.\n- `rank` → hạng trong nhóm đua Top 1.000 (người đăng ký từ #1.001).\n- `vip` → server tự quyết: `early` hoặc `rank ≤ 1.000`.\n\n**400** email sai định dạng.",
+            "description": "Frontend gọi trước khi gửi OTP để biết email đã đăng ký chưa (đã có thì chỉ đổi lời nhắc, vẫn phải nhập OTP).\n\n**200** `{ exists: true | false }` — không còn trả profile, `refCode` hay hạng.\n\n**400** email sai định dạng.",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"email\": \"{{email}}\"\n}",
@@ -135,13 +140,8 @@
                 "exec": [
                   "pm.test('Trả về 200', () => pm.response.to.have.status(200));",
                   "const b = pm.response.json();",
-                  "if (b.exists) {",
-                  "  pm.collectionVariables.set('refCode', b.profile.refCode);",
-                  "  const p = b.profile;",
-                  "  console.log(p.early ? `Email này thuộc First 1.000 (người thứ #${p.joinIndex}), VIP` : `Email này đã đăng ký, hạng đua #${p.rank}, VIP: ${p.vip}`);",
-                  "} else {",
-                  "  console.log('Email chưa đăng ký — chạy tiếp bước 3 để gửi OTP.');",
-                  "}"
+                  "pm.test('Chỉ có exists', () => pm.expect(b).to.have.all.keys('exists'));",
+                  "console.log(b.exists ? 'Email đã đăng ký — vẫn phải nhập OTP để xem kết quả.' : 'Email chưa đăng ký — chạy tiếp bước 3 để gửi OTP.');"
                 ]
               }
             }
@@ -232,7 +232,7 @@
                 "verify"
               ]
             },
-            "description": "Xác thực mã và tạo chỗ trong waitlist.\n\nNếu lúc gửi OTP có kèm `ref` hợp lệ thì người mời được **+1 lượt mời (= +10 điểm)** ngay tại bước này. Tự mời chính mình không được tính.\n\n**200** `{ email, early, joinIndex, rank, vip, registered, refCode, invites }`\n\n- 1.000 người đăng ký đầu tiên: `early: true`, `rank: null`, `vip: true`.\n- Từ người #1.001: `early: false`, `rank` là hạng trong nhóm đua Top 1.000.\n\n**400** mã sai, hoặc mã đã hết hạn / chưa từng xin mã.\n\n**409** `{ error, alreadyRegistered: true, profile }` — email đã tham gia waitlist, kèm kết quả hiện tại.\n\n**429** nhập sai quá 5 lần, phải xin mã mới."
+            "description": "Xác thực mã. Email mới thì tạo chỗ trong waitlist; email đã đăng ký thì đây chính là bước **đăng nhập**.\n\nNếu lúc gửi OTP có kèm `ref` hợp lệ thì người mời được **+1 lượt mời (= +10 điểm)** ngay tại bước này, nhưng chỉ trước `TOP_DEADLINE` (sau đó điểm đứng yên). Tự mời chính mình không được tính.\n\n**200** `{ profile, token }`, thêm `alreadyRegistered: true` nếu email đã đăng ký từ trước (không còn 409).\n\n`profile` = `{ email, early, joinIndex, rank, inTop, budget, vip, registered, refCode, invites }`.\n\n- `early: true` → thuộc First 1.000.\n- `rank` → hạng Top của **mọi** người (không còn `null`).\n- `inTop` → đang trong Top 1.000; sau finalize lấy theo bản đã chốt. Người đăng ký sau `TOP_DEADLINE` luôn `false`.\n- `budget` → First + Top cộng dồn (200.000đ nếu có cả hai).\n- `vip` = `early || inTop`.\n\n`token` sống 12 giờ; gửi qua header `Authorization: Bearer <token>`.\n\n**400** mã sai, hoặc mã đã hết hạn / chưa từng xin mã.\n\n**429** nhập sai quá 5 lần, phải xin mã mới."
           },
           "event": [
             {
@@ -242,14 +242,14 @@
                 "exec": [
                   "const b = pm.response.json();",
                   "if (pm.response.code === 200) {",
-                  "  pm.collectionVariables.set('refCode', b.refCode);",
-                  "  console.log(b.early ? `Đăng ký thành công — First 1.000, người thứ #${b.joinIndex}` : `Đăng ký thành công — hạng đua #${b.rank}`, '— refCode', b.refCode);",
-                  "  pm.test('Đủ 8 field của profile', () =>",
-                  "    pm.expect(b).to.have.all.keys('email', 'early', 'joinIndex', 'rank', 'vip', 'registered', 'refCode', 'invites'));",
-                  "  pm.test('First 1.000 thì không có hạng đua', () => { if (b.early) pm.expect(b.rank).to.be.null; });",
-                  "} else if (pm.response.code === 409) {",
+                  "  pm.collectionVariables.set('token', b.token);",
                   "  pm.collectionVariables.set('refCode', b.profile.refCode);",
-                  "  console.log('Email đã đăng ký từ trước.', b.profile.early ? 'First 1.000' : `Hạng đua #${b.profile.rank}`);",
+                  "  const p = b.profile;",
+                  "  console.log(b.alreadyRegistered ? 'Đăng nhập lại' : 'Đăng ký thành công', '— người thứ #' + p.joinIndex, '· hạng Top #' + p.rank, '· ngân sách', p.budget, '· refCode', p.refCode);",
+                  "  pm.test('Có token phiên', () => pm.expect(b.token).to.be.a('string').that.is.not.empty);",
+                  "  pm.test('Profile đủ field', () =>",
+                  "    pm.expect(b.profile).to.include.all.keys('email', 'early', 'joinIndex', 'rank', 'inTop', 'budget', 'vip', 'registered', 'refCode', 'invites'));",
+                  "  pm.test('Mọi người đều có hạng Top', () => pm.expect(b.profile.rank).to.be.a('number'));",
                   "} else {",
                   "  console.log('Lỗi:', b.error);",
                   "}"
@@ -266,11 +266,15 @@
               {
                 "key": "Content-Type",
                 "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
               }
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"email\": \"{{email}}\"\n}",
+              "raw": "{}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -288,7 +292,7 @@
                 "options"
               ]
             },
-            "description": "Quyền chọn cổ phiếu và bảng giá, gọi TRƯỚC khi người dùng chọn.\n\n- **VIP** (First 1.000 — 1.000 người đăng ký đầu tiên, HOẶC Top 1.000 theo điểm trong nhóm đăng ký từ #1.001): nhóm VIP + Standard, ngân sách 100.000đ.\n- **Còn lại**: chỉ nhóm Standard, ngân sách 50.000đ.\n- `early: true` → thuộc First 1.000, `rank: null`.\n- `email` để rỗng → bản xem thử (`preview: true`), tạm áp mức cao nhất.\n- `locked: true` nghĩa là quyền lợi đã chốt ở lần Reserve đầu tiên, hạng trôi về sau không đổi.\n- `prices` chỉ chứa giá của những mã user được phép chọn.\n\n**200** `{ rank, early, budget, pools, locked, preview, selected, prices }`"
+            "description": "Quyền chọn cổ phiếu và bảng giá, gọi TRƯỚC khi người dùng chọn. Header `Authorization` là tuỳ chọn.\n\n- Có token: quyền lợi thật. Ngân sách = First 100.000đ + Top 100.000đ (cộng dồn 200.000đ nếu có cả hai), nhóm VIP + Standard. Không thuộc nhóm nào: 50.000đ, chỉ Standard.\n- Không token (hoặc token hết hạn): bản xem thử, `preview: true`, tạm áp 100.000đ cả hai nhóm.\n- `phase`: `open` (trước `TOP_DEADLINE`), `frozen` (đã qua deadline, chờ finalize), `repick` (đã chốt, được chọn lại trong quyền lợi đã chốt), `closed` (qua `REPICK_DEADLINE`).\n- `prices` chỉ chứa giá của những mã user được phép chọn.\n\n**200** `{ rank, early, inTop, budget, pools, phase, preview, selected, prices }`"
           },
           "event": [
             {
@@ -302,7 +306,7 @@
                   "  pm.expect(b.pools).to.be.an('array').that.is.not.empty;",
                   "});",
                   "pm.collectionVariables.set('budget', b.budget);",
-                  "console.log('Ngân sách:', b.budget, '· nhóm:', b.pools.join(', '), '· early:', b.early, '· preview:', b.preview);"
+                  "console.log('Ngân sách:', b.budget, '· nhóm:', b.pools.join(', '), '· early:', b.early, '· inTop:', b.inTop, '· phase:', b.phase, '· preview:', b.preview);"
                 ]
               }
             }
@@ -316,11 +320,15 @@
               {
                 "key": "Content-Type",
                 "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
               }
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"email\": \"{{email}}\",\n  \"tickers\": [\"VCB\", \"FPT\", \"HPG\"]\n}",
+              "raw": "{\n  \"tickers\": [\n    \"VCB\",\n    \"FPT\",\n    \"HPG\"\n  ]\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -337,7 +345,7 @@
                 "reserve"
               ]
             },
-            "description": "Ghi nhận các mã cổ phiếu đã chọn. **Chọn lại thì ghi đè** lựa chọn trước đó.\n\n- Chỉ email đã xác thực waitlist mới gọi được.\n- Mã viết thường vẫn nhận, mã trùng bị gộp lại. Tối đa 100 mã.\n- Mã phải thuộc **nhóm user được phép** (xem request Quyền chọn ở trên).\n- Tổng giá trị không được vượt ngân sách (mỗi mã tính 1 cổ phiếu).\n- Lần Reserve đầu tiên **chốt** hạng, ngân sách, nhóm và bảng giá — không đổi về sau. Người First 1.000 được lưu `lockedRank = null`.\n\n**200** `{ ok: true, tickers, totalValue, budget }`\n\n**400** email sai định dạng · không chọn mã nào · mã ngoài danh sách · mã không thuộc nhóm được phép (kèm `wrongPool`) · tổng vượt ngân sách (kèm `totalValue`, `budget`).\n\n**403** email chưa tham gia waitlist.\n\n**503** thiếu giá trong snapshot (kèm `missing`) — chạy `npm run prices`."
+            "description": "Ghi nhận các mã cổ phiếu đã chọn. **Chọn lại thì ghi đè** lựa chọn trước đó. Danh tính lấy từ token, mọi `email` trong body bị bỏ qua.\n\n- Mã viết thường vẫn nhận, mã trùng bị gộp lại. Tối đa 100 mã.\n- Mã phải thuộc **nhóm user được phép** (xem request Quyền chọn ở trên).\n- Tổng giá trị không được vượt ngân sách (mỗi mã tính 1 cổ phiếu).\n- Không còn chốt quyền lợi ở lần Reserve đầu: quyền lợi tính theo hạng hiện tại cho tới khi finalize, sau đó theo bản đã chốt. Mã đã chọn giữ giá lúc chọn (`lockedPrices`).\n- Người bị yêu cầu chọn lại sau finalize (`needsRepick`) chọn xong thì được ghi `repickedAt`.\n\n**200** `{ ok: true, tickers, totalValue, budget }`\n\n**400** không chọn mã nào · mã ngoài danh sách · mã không thuộc nhóm được phép (kèm `wrongPool`) · tổng vượt ngân sách (kèm `totalValue`, `budget`).\n\n**401** thiếu hoặc sai token.\n\n**423** giỏ đang khoá: `frozen` (đang chốt Top) hoặc `closed` (hết hạn chọn).\n\n**503** thiếu giá trong snapshot (kèm `missing`) — chạy `npm run prices`."
           },
           "event": [
             {
@@ -421,7 +429,7 @@
                 "leaderboard"
               ]
             },
-            "description": "Bảng xếp hạng công khai của **nhóm đua** — chỉ người đăng ký từ #1.001. 1.000 người đăng ký đầu tiên (First 1.000) đã chắc VIP nên không nằm trong bảng và không ảnh hưởng ngưỡng điểm.\n\n- Thứ tự: điểm (`invites × 10`) cao trước, bằng điểm thì ai đăng ký trước đứng trên.\n- Mỗi trang 7 người. `page` không hợp lệ → trang 1; vượt quá số trang → `top: []`.\n- `cutoff` = điểm của người đứng hạng 1.000 trong nhóm đua (ngưỡng vào Top); `null` khi nhóm đua chưa đủ 1.000 người.\n- Email đã được che ở server.\n\n**200** `{ top: [{ rank, masked, points }], page, pageSize, total, totalPages, cutoff }`"
+            "description": "Bảng xếp hạng công khai của **Top 1.000**, xếp trên **toàn bộ** người đăng ký (kể cả người First).\n\n- Thứ tự: điểm (`invites × 10`) cao trước, bằng điểm thì ai đăng ký trước đứng trên.\n- Mỗi trang 7 người. `page` không hợp lệ → trang 1; vượt quá số trang → `top: []`.\n- `first: true` → người này thuộc First 1.000 (để hiện huy hiệu).\n- `cutoff` = điểm của người đứng hạng 1.000 (ngưỡng vào Top); `null` khi chưa đủ 1.000 người.\n- Email đã được che ở server.\n\n**200** `{ top: [{ rank, masked, points, first }], page, pageSize, total, totalPages, cutoff }`"
           },
           "event": [
             {
@@ -433,7 +441,154 @@
                   "const b = pm.response.json();",
                   "pm.test('Đủ field', () => pm.expect(b).to.have.all.keys('top', 'page', 'pageSize', 'total', 'totalPages', 'cutoff'));",
                   "pm.test('Không lộ email gốc', () => b.top.forEach((r) => pm.expect(r.masked).to.include('•')));",
-                  "console.log('Nhóm đua có', b.total, 'người · ngưỡng Top:', b.cutoff);"
+                  "console.log('Có', b.total, 'người trên bảng · ngưỡng Top:', b.cutoff);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "9. Bảng First 1.000",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"page\": 1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/leaderboard/first",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "leaderboard",
+                "first"
+              ]
+            },
+            "description": "Danh sách công khai First 1.000, chỉ để thông tin (không có điểm). Chỉ gồm người có `joinIndex ≤ 1.000`, mới nhất lên đầu. Mỗi trang 7 người; `page` vượt quá → `rows: []`.\n\n**200** `{ rows: [{ joinIndex, masked, at }], page, pageSize, total, totalPages, firstRemaining }`"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Trả về 200', () => pm.response.to.have.status(200));",
+                  "const b = pm.response.json();",
+                  "pm.test('Đủ field', () => pm.expect(b).to.have.all.keys('rows', 'page', 'pageSize', 'total', 'totalPages', 'firstRemaining'));",
+                  "pm.test('Sắp joinIndex giảm dần', () => b.rows.forEach((r, i) => { if (i) pm.expect(r.joinIndex).to.be.below(b.rows[i - 1].joinIndex); }));",
+                  "console.log('First 1.000 đã có', b.total, 'người · còn', b.firstRemaining, 'suất');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "10. Hồ sơ của tôi (/me)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/waitlist/me",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "waitlist",
+                "me"
+              ]
+            },
+            "description": "Khôi phục profile từ token phiên (frontend gọi khi tải lại trang trong cùng tab).\n\n**200** profile như bước 4.\n\n**401** thiếu hoặc sai token."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Trả về 200', () => pm.response.to.have.status(200));",
+                  "const b = pm.response.json();",
+                  "pm.test('Có hạng Top', () => pm.expect(b.rank).to.be.a('number'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "11. Đăng xuất",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/waitlist/logout",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "waitlist",
+                "logout"
+              ]
+            },
+            "description": "Xoá phiên trên server. Sau đó token cũ trả **401**.\n\n**200** `{ ok: true }`\n\n**401** thiếu hoặc sai token."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Trả về 200', () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set('token', '');"
                 ]
               }
             }
@@ -570,7 +725,7 @@
           }
         },
         {
-          "name": "Email đã đăng ký (409)",
+          "name": "Email đã đăng ký (200, alreadyRegistered)",
           "request": {
             "method": "POST",
             "header": [
@@ -599,11 +754,25 @@
                 "verify"
               ]
             },
-            "description": "Xin mã mới rồi xác thực lại bằng một email đã đăng ký.\n\n**409** `{ error, alreadyRegistered: true, profile: { email, early, joinIndex, rank, vip, registered, refCode, invites } }`\n\nFrontend đọc `alreadyRegistered` và `profile` để hiện thẳng kết quả hiện tại thay vì báo lỗi."
-          }
+            "description": "Xin mã mới rồi xác thực lại bằng một email đã đăng ký. Đây là cách đăng nhập.\n\n**200** `{ profile, token, alreadyRegistered: true }` — không còn 409."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Trả về 200 kèm alreadyRegistered', () => {",
+                  "  pm.response.to.have.status(200);",
+                  "  pm.expect(pm.response.json().alreadyRegistered).to.eql(true);",
+                  "});"
+                ]
+              }
+            }
+          ]
         },
         {
-          "name": "Reserve khi chưa đăng ký (403)",
+          "name": "Reserve không có token (401)",
           "request": {
             "method": "POST",
             "header": [
@@ -614,7 +783,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"email\": \"chua-dang-ky@example.com\",\n  \"tickers\": [\"VCB\"]\n}",
+              "raw": "{\n  \"tickers\": [\n    \"VCB\"\n  ]\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -631,7 +800,7 @@
                 "reserve"
               ]
             },
-            "description": "**403** `{ \"error\": \"Email này chưa tham gia waitlist. Vui lòng đăng ký trước khi nhận quà.\" }`"
+            "description": "Không gửi header `Authorization` (hoặc token sai, hết hạn).\n\n**401** `{ \"error\": \"Phiên đăng nhập đã hết hạn. Vui lòng xác thực lại email.\" }`"
           },
           "event": [
             {
@@ -639,7 +808,7 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('Trả về 403', () => pm.response.to.have.status(403));"
+                  "pm.test('Trả về 401', () => pm.response.to.have.status(401));"
                 ]
               }
             }
@@ -653,11 +822,15 @@
               {
                 "key": "Content-Type",
                 "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
               }
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"email\": \"{{email}}\",\n  \"tickers\": [\"VCB\", \"KHONGCO\"]\n}",
+              "raw": "{\n  \"tickers\": [\n    \"VCB\",\n    \"KHONGCO\"\n  ]\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -685,11 +858,15 @@
               {
                 "key": "Content-Type",
                 "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
               }
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"email\": \"{{email}}\",\n  \"tickers\": [\"VCB\", \"VIC\", \"VHM\", \"VNM\", \"HPG\", \"FPT\", \"MWG\", \"TCB\", \"MSN\", \"VPB\"]\n}",
+              "raw": "{\n  \"tickers\": [\n    \"VCB\",\n    \"VIC\",\n    \"VHM\",\n    \"VNM\",\n    \"HPG\",\n    \"FPT\",\n    \"MWG\",\n    \"TCB\",\n    \"MSN\",\n    \"VPB\"\n  ]\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -717,11 +894,15 @@
               {
                 "key": "Content-Type",
                 "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
               }
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"email\": \"{{email}}\",\n  \"tickers\": [\"PNJ\", \"VCB\"]\n}",
+              "raw": "{\n  \"tickers\": [\n    \"PNJ\",\n    \"VCB\"\n  ]\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -738,8 +919,55 @@
                 "reserve"
               ]
             },
-            "description": "Chạy với một email **không phải VIP** (không thuộc First 1.000 và ngoài Top 1.000 nhóm đua — chỉ được nhóm Standard) rồi chọn một mã VIP. Lỗi nêu đích danh mã sai trong `wrongPool`.\n\n**400**"
+            "description": "Chạy với token của người **không thuộc First và ngoài Top 1.000** (chỉ được nhóm Standard) rồi chọn một mã VIP. Lỗi nêu đích danh mã sai trong `wrongPool`.\n\n**400**"
           }
+        },
+        {
+          "name": "Reserve khi giỏ đang khoá (423)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tickers\": [\"VCB\"]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/reserve",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "reserve"
+              ]
+            },
+            "description": "Chỉ xảy ra khi đã đặt `TOP_DEADLINE`: sau deadline mà chưa chạy `npm run finalize` (`frozen`), hoặc sau `REPICK_DEADLINE` (`closed`). Người đăng ký sau `TOP_DEADLINE` không bao giờ `frozen`.\n\n**423** `{ error, phase }`"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Trả về 423 khi giỏ đang khoá', () => pm.response.to.have.status(423));"
+                ]
+              }
+            }
+          ]
         }
       ]
     }
