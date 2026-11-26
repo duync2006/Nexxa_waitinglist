@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api, session } from './lib/api.js';
 import { FIRST_SLOTS, TOTAL_SLOTS } from '../shared/catalog.js';
+import { fmt } from './lib/format.js';
 import Logo from './components/Logo.jsx';
 import msbMark from './assets/msb-mark.png';
 import SignupCard from './components/SignupCard.jsx';
@@ -27,6 +28,16 @@ function loadTheme() {
   try { return localStorage.getItem(THEME_KEY) === 'dark' ? 'dark' : 'light'; } catch { return 'light'; }
 }
 
+// Dòng dưới vòng khan hiếm. Còn suất First: khoe số người đã nhận (bằng chứng xã hội). Hết
+// suất: không còn "đăng ký là có" nữa, nên chỉ sang con đường còn mở là mời bạn để vào Top.
+function leadLine({ loaded, firstSlots, firstRemaining }) {
+  if (!loaded) return 'Đăng ký NEXXA, nhận cổ phiếu miễn phí';
+  const taken = firstSlots - firstRemaining;
+  if (firstRemaining <= 0) return `Đã trao hết ${fmt(firstSlots)} suất First · Mời 1 bạn để vào Top ${fmt(TOTAL_SLOTS)}`;
+  if (taken <= 0) return 'Hãy là người đầu tiên nhận cổ phiếu miễn phí';
+  return `${fmt(taken)} suất đã giữ chỗ`;
+}
+
 export default function App() {
   // Suất VIP còn lại ở hai đường vào, server tính sẵn. Khung hình đầu (chưa có stats) coi
   // như còn nguyên để vòng không nháy về 0.
@@ -37,7 +48,9 @@ export default function App() {
     topRemaining: TOTAL_SLOTS,
     topCutoff: null,
     topStart: null,
-    topDeadline: null
+    topDeadline: null,
+    // false tới khi /api/stats trả về lần đầu: dòng "X người đã nhận" không được hiện số 0 giả.
+    loaded: false
   });
   // Người đăng ký gần nhất, email đã che sẵn ở server. Đi ké /api/stats nên tự làm mới
   // theo cùng nhịp 30 giây, không thêm request nào.
@@ -73,7 +86,8 @@ export default function App() {
             topRemaining: s.topRemaining ?? prev.topRemaining,
             topCutoff: s.topCutoff ?? null,
             topStart: s.topStart ?? null,
-            topDeadline: s.topDeadline ?? null
+            topDeadline: s.topDeadline ?? null,
+            loaded: true
           }));
           setRecent(s.recent ?? []);
         })
@@ -223,7 +237,7 @@ export default function App() {
             </span>
             <h1>
               {/* Xây Dựng Tài Sản Cùng NEXXA */}
-              <span className="h1-accent">Free Cổ Phiếu</span>
+              <span className="h1-accent">Invest with NEXXA</span>
             </h1>
             {/* Hai dòng là MỘT ý: ai được (điều kiện) rồi được gì (phần thưởng). Bọc chung
                 để khoảng cách giữa chúng hẹp hơn khoảng cách với h1 và khối khan hiếm —
@@ -231,7 +245,7 @@ export default function App() {
             <Scarcity slots={slots} />
             <div className="lead-group">
               {/* <p className="lead-cond">{fmt(totalSlots)} người đăng ký NEXXA đầu tiên</p> */}
-              <p className="lead">Join NEXXA For 10 VIP Stocks</p>
+              <p className="lead">{leadLine(slots)}</p>
             </div>
             <FeaturedStocks />
           </div>

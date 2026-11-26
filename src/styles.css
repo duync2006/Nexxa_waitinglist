@@ -262,7 +262,7 @@ button:disabled { opacity: 0.6; cursor: not-allowed; }
 /* Hero */
 .hero { padding-top: clamp(16px, 2.5vw, 28px); padding-bottom: 48px; display: flex; flex-wrap: wrap; gap: clamp(32px, 5vw, 64px); align-items: flex-start; }
 .hero-main { flex: 1 1 100%; min-width: 0; display: flex; flex-direction: column; gap: 10px; }
-.hero-copy { display: flex; flex-direction: column; align-items: center; gap: 16px; text-align: center; }
+.hero-copy { display: flex; flex-direction: column; align-items: center; gap: 16px; text-align: center; margin-top: -10px;margin-bottom: 5px}
 .hero h1 { font-size: clamp(36px, 5vw, 60px); line-height: 1.08; font-weight: 800;  }
 /* Cụm điều kiện + phần thưởng dưới headline. gap 2px: hai dòng phải dính nhau thành một
    khối, nếu lấy gap 16px của .hero-copy thì chúng trôi ra xa và mất quan hệ với nhau. */
@@ -451,10 +451,10 @@ button:disabled { opacity: 0.6; cursor: not-allowed; }
 /* Một chuyển động duy nhất của khối: cung "vẽ" ra từ 12 giờ khi trang tải. */
 @keyframes ring-draw { from { stroke-dasharray: 0 100; } }
 .ring-value { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; font-variant-numeric: tabular-nums; line-height: 1; }
-.ring-value b { font-size: 13; font-weight: 800; letter-spacing: -0.02em; color: var(--ink); padding-bottom: 2px; }
+.ring-value b { font-size: 13px; font-weight: 800; letter-spacing: -0.02em; color: var(--ink); padding-bottom: 2px; }
 .ring-value span { font-size: 10px; font-weight: 500; color: var(--muted); }
 /* Số suất còn lại cùng cỡ với nhãn bên ngoài vòng (.ring-label), không to như trước */
-.ring-value .ring-remain { font-size: 15px; font-weight: 700; letter-spacing: 0; }
+.ring-value .ring-remain { font-size: 17px; font-weight: 700; letter-spacing: 0; }
 .ring figcaption { display: flex; flex-direction: column; align-items: center; gap: 1px; text-align: center; }
 .ring-label { display: flex; align-items: center; gap: 5px; font-size: 13px; font-weight: 700; color: var(--ink); }
 /* Chấm màu trước nhãn để nhãn khớp với màu cung phía trên */
